@@ -1,0 +1,2112 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<title>Baku Mobility Twin — buses and bicycles</title>
+<meta name="description" content="A digital twin of Baku's bus network and bike lanes: mirror the network, monitor the moment, understand the gaps, and test decisions before the city pays for them.">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<style>
+:root{
+  --font:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --r:16px;--r2:12px;
+  --ink:#0f172a;--ink2:#475569;--ink3:#64748b;--hair:rgba(15,23,42,.10);--hair2:rgba(15,23,42,.06);
+  --glass:rgba(255,255,255,.80);--glass-strong:rgba(255,255,255,.92);
+  --shadow:0 12px 32px rgba(15,23,42,.14),0 2px 6px rgba(15,23,42,.06);
+  --accent:#e58a00;--accent-soft:rgba(229,138,0,.12);--bike:#059669;--bike-soft:rgba(5,150,105,.12);
+  --cyan:#0284c7;--violet:#7c3aed;--violet-soft:rgba(124,58,237,.12);--danger:#dc2626;--danger-soft:rgba(220,38,38,.10);
+  --ok:#059669;--warn:#b45309;--warn-soft:rgba(217,119,6,.12);
+  --chip:rgba(15,23,42,.06);--chip-hover:rgba(15,23,42,.10);--chip-on:#0f172a;--chip-on-ink:#fff;
+  --track:rgba(15,23,42,.12);--curve:#e58a00;
+  color-scheme:light;
+}
+:root[data-theme="dark"]{
+  --ink:#e7edf7;--ink2:#a6b3c7;--ink3:#7d8ba3;--hair:rgba(255,255,255,.10);--hair2:rgba(255,255,255,.06);
+  --glass:rgba(10,15,27,.70);--glass-strong:rgba(12,18,32,.90);
+  --shadow:0 16px 44px rgba(0,0,0,.46),0 1px 0 rgba(255,255,255,.05) inset;
+  --accent:#ffb020;--accent-soft:rgba(255,176,32,.14);--bike:#34e3a8;--bike-soft:rgba(52,227,168,.12);
+  --cyan:#38bdf8;--violet:#a78bfa;--violet-soft:rgba(167,139,250,.14);--danger:#f87171;--danger-soft:rgba(248,113,113,.12);
+  --ok:#34d399;--warn:#fbbf24;--warn-soft:rgba(251,191,36,.12);
+  --chip:rgba(255,255,255,.07);--chip-hover:rgba(255,255,255,.12);--chip-on:#e7edf7;--chip-on-ink:#0b1220;
+  --track:rgba(255,255,255,.14);--curve:#ffb020;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#0b1220;font-family:var(--font);color:var(--ink);
+  -webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;font-size:14px;line-height:1.4}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none;padding:0}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
+#map{position:fixed;inset:0}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+.glass{background:var(--glass);backdrop-filter:blur(18px) saturate(1.6);-webkit-backdrop-filter:blur(18px) saturate(1.6);
+  border:1px solid var(--hair);box-shadow:var(--shadow);border-radius:var(--r)}
+.muted{color:var(--ink2)}.faint{color:var(--ink3)}
+.small{font-size:12px}.tiny{font-size:11px;letter-spacing:.01em}
+.hidden{display:none!important}
+
+/* ---------- header ---------- */
+#top{position:fixed;top:12px;left:12px;right:12px;display:flex;align-items:center;gap:10px;pointer-events:none;z-index:20}
+#top>*{pointer-events:auto}
+.brand{display:flex;align-items:center;gap:10px;padding:8px 14px 8px 10px;height:52px}
+.brand .mark{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
+  background:conic-gradient(from 210deg,#ffb020,#ff6b5b,#a78bfa,#38bdf8,#34e3a8,#ffb020);box-shadow:0 2px 10px rgba(255,176,32,.35)}
+.brand .mark i{width:12px;height:12px;border-radius:4px;background:rgba(10,15,27,.85);display:block}
+.brand b{display:block;font-size:14px;letter-spacing:-.01em}
+.brand small{display:block;font-size:11.5px;color:var(--ink2)}
+#modes{display:flex;gap:2px;padding:5px;height:52px;align-items:center;margin:0 auto}
+.tab{height:40px;padding:0 14px;border-radius:11px;font-weight:600;font-size:13px;color:var(--ink2);display:flex;align-items:center;gap:8px;white-space:nowrap}
+.tab:hover{background:var(--chip-hover);color:var(--ink)}
+.tab[aria-selected="true"]{background:var(--chip-on);color:var(--chip-on-ink)}
+.tab kbd{font:600 10px var(--font);opacity:.5;border:1px solid currentColor;border-radius:4px;padding:0 4px;line-height:14px}
+.fine .tab kbd{display:inline}
+.clock{display:flex;align-items:center;gap:6px;padding:5px 6px 5px 6px;height:52px}
+.iconbtn{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;color:var(--ink)}
+.iconbtn:hover{background:var(--chip-hover)}
+.iconbtn.on{background:var(--chip-on);color:var(--chip-on-ink)}
+.iconbtn svg{width:18px;height:18px}
+.time{padding:0 6px;min-width:92px}
+.time b{display:block;font-size:20px;letter-spacing:-.02em;line-height:1.05}
+.time small{display:block;font-size:11px;color:var(--ink2);white-space:nowrap}
+.speeds{display:flex;background:var(--chip);border-radius:10px;padding:2px}
+.speeds button{height:32px;min-width:40px;padding:0 8px;border-radius:8px;font-size:12px;font-weight:650;color:var(--ink2)}
+.speeds button[aria-pressed="true"]{background:var(--glass-strong);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.actions{display:flex;gap:2px;padding:5px;height:52px;align-items:center}
+
+/* ---------- side panel ---------- */
+#panel{position:fixed;top:76px;left:12px;bottom:84px;width:368px;display:flex;flex-direction:column;overflow:hidden;z-index:15}
+#panel .head{padding:16px 18px 6px}
+#panel .eyebrow{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+#panel h2{margin:4px 0 2px;font-size:19px;letter-spacing:-.015em;line-height:1.25}
+#panel .lede{margin:6px 0 0;color:var(--ink2);font-size:13px}
+#panel .body{overflow:auto;padding:6px 18px 18px;flex:1;scrollbar-width:thin}
+.sheet-tabs,.handle{display:none}
+.sec{margin-top:16px}
+.sec h3{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin:0 0 8px;display:flex;justify-content:space-between;align-items:center}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.kpi{background:var(--chip);border-radius:12px;padding:10px 12px;min-height:72px}
+.kpi .v{font-size:23px;font-weight:700;letter-spacing:-.02em;line-height:1.15}
+.kpi .v small{font-size:12px;font-weight:600;color:var(--ink2);margin-left:2px}
+.kpi .l{font-size:12px;color:var(--ink2);margin-top:2px}
+.kpi .t{font-size:10.5px;color:var(--ink3);margin-top:3px;text-transform:uppercase;letter-spacing:.06em}
+.kpi.wide{grid-column:span 2}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{min-height:34px;padding:6px 11px;border-radius:999px;background:var(--chip);font-size:12.5px;font-weight:600;color:var(--ink2);display:inline-flex;align-items:center;gap:7px}
+.chip:hover{background:var(--chip-hover);color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--chip-on);color:var(--chip-on-ink)}
+.chip .dot{width:9px;height:9px;border-radius:50%;flex:none}
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:12px;color:var(--ink2)}
+.legend span{display:flex;align-items:center;gap:7px}
+.legend i{width:16px;height:4px;border-radius:2px;display:inline-block;flex:none}
+.note{font-size:12px;color:var(--ink2);background:var(--chip);border-radius:12px;padding:10px 12px;margin-top:10px}
+.note b{color:var(--ink)}
+.link{color:var(--accent);font-weight:650;text-decoration:none;cursor:pointer}
+.list{display:flex;flex-direction:column;gap:6px}
+.row{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;background:var(--chip);text-align:left;width:100%;min-height:44px}
+.row:hover{background:var(--chip-hover)}
+.row .rk{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-size:12px;font-weight:700;background:var(--glass-strong);flex:none}
+.row .main{flex:1;min-width:0}
+.row .main b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .main span{display:block;font-size:11.5px;color:var(--ink2)}
+.row .val{font-weight:700;font-size:14px;text-align:right}
+.row .val small{display:block;font-weight:500;font-size:10.5px;color:var(--ink3)}
+.bar{height:6px;border-radius:3px;background:var(--track);overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;border-radius:3px;background:var(--accent)}
+.alert{display:flex;gap:10px;padding:10px 11px;border-radius:12px;background:var(--warn-soft);margin-bottom:6px;font-size:12.5px;width:100%;text-align:left}
+.alert.crit{background:var(--danger-soft)}
+.alert.info{background:var(--chip)}
+.alert .ic{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-weight:800;font-size:12px;flex:none;background:var(--warn);color:#fff}
+.alert.crit .ic{background:var(--danger)}.alert.info .ic{background:var(--cyan)}
+.alert b{display:block;font-size:12.5px}
+.alert span{color:var(--ink2)}
+.btn{min-height:40px;padding:0 14px;border-radius:11px;font-weight:650;font-size:13px;display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--chip)}
+.btn:hover{background:var(--chip-hover)}
+.btn.primary{background:var(--chip-on);color:var(--chip-on-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.block{width:100%}
+.btn svg{width:16px;height:16px}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+
+/* scenarios */
+.scn{border-radius:14px;background:var(--chip);margin-bottom:8px;overflow:hidden}
+.scn>button.sh{width:100%;display:flex;align-items:center;gap:10px;padding:11px 12px;text-align:left;min-height:52px}
+.scn>button.sh .n{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-weight:800;font-size:12px;background:var(--glass-strong);flex:none}
+.scn>button.sh b{display:block;font-size:13.5px}
+.scn>button.sh span{display:block;font-size:11.5px;color:var(--ink2)}
+.scn>button.sh .st{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 7px;border-radius:6px;background:var(--bike-soft);color:var(--bike)}
+.scn .sb{padding:2px 12px 12px}
+.scn.open{background:var(--glass-strong);box-shadow:0 0 0 1px var(--hair) inset}
+.ba{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:baseline;padding:8px 0;border-bottom:1px solid var(--hair2)}
+.ba:last-child{border-bottom:0}
+.ba .k{font-size:12.5px;color:var(--ink2)}
+.ba .x{font-weight:700;font-size:15px;text-align:right;white-space:nowrap}
+.ba .x s{text-decoration:none;color:var(--ink3);font-weight:600;font-size:12.5px;margin-right:6px}
+.ba .x s::after{content:" →";}
+.ba .d{grid-column:2;font-size:11px;font-weight:700;text-align:right}
+.ba .d.good{color:var(--ok)}.ba .d.bad{color:var(--danger)}.ba .d.neutral{color:var(--ink3)}
+.rests{font-size:11.5px;color:var(--ink3);margin-top:8px;display:flex;gap:6px}
+.rests b{color:var(--ink2);font-weight:650}
+label.sl{display:block;font-size:12px;color:var(--ink2);margin:10px 0 2px}
+label.sl output{float:right;font-weight:700;color:var(--ink)}
+input[type=range]{width:100%;accent-color:var(--accent);height:28px;margin:0}
+.seg{display:flex;background:var(--chip);border-radius:10px;padding:2px;gap:2px;margin-top:6px}
+.seg button{flex:1;min-height:34px;border-radius:8px;font-size:12px;font-weight:650;color:var(--ink2);padding:0 6px}
+.seg button[aria-pressed="true"]{background:var(--glass-strong);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+
+/* ---------- detail card ---------- */
+#detail{position:fixed;top:76px;right:12px;width:340px;max-height:calc(100% - 172px);overflow:auto;z-index:16;padding:16px 16px 14px}
+#detail .x{position:absolute;top:10px;right:10px}
+#detail .kind{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
+#detail h3{margin:4px 34px 2px 0;font-size:18px;letter-spacing:-.01em;line-height:1.25}
+#detail .sub{font-size:12.5px;color:var(--ink2)}
+.lines{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.lno{min-width:34px;height:26px;padding:0 7px;border-radius:7px;font-weight:750;font-size:12px;display:inline-grid;place-items:center;color:#0b1220}
+.next{display:grid;grid-template-columns:auto 1fr auto;gap:6px 10px;align-items:center;font-size:12.5px;margin-top:8px}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.fact{background:var(--chip);border-radius:10px;padding:8px 10px}
+.fact b{display:block;font-size:15px}
+.fact span{font-size:11px;color:var(--ink2)}
+#detail .sec h3{font-size:11px;margin:0 0 8px;letter-spacing:.1em}
+
+/* ---------- ask ---------- */
+#ask{position:fixed;left:50%;bottom:72px;transform:translateX(-50%);width:min(560px,calc(100% - 820px));min-width:380px;z-index:17;border-radius:14px}
+#ask .in{display:flex;align-items:center;gap:8px;padding:0 8px 0 14px;height:48px}
+#ask svg{width:18px;height:18px;color:var(--accent);flex:none}
+#ask input{flex:1;border:0;background:transparent;outline:none;font-size:14px;min-width:0;height:44px}
+#ask input::placeholder{color:var(--ink3)}
+#ask kbd{font:600 11px var(--font);color:var(--ink3);border:1px solid var(--hair);border-radius:5px;padding:1px 6px}
+#ask ul{list-style:none;margin:0;padding:6px;border-top:1px solid var(--hair);max-height:300px;overflow:auto}
+#ask li{padding:9px 10px;border-radius:9px;display:flex;gap:10px;align-items:center;cursor:pointer;font-size:13px;min-height:40px}
+#ask li[aria-selected="true"],#ask li:hover{background:var(--chip-hover)}
+#ask li .k{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);width:50px;flex:none}
+#ask li span.h{color:var(--ink3);margin-left:auto;font-size:11.5px;white-space:nowrap}
+
+/* ---------- timeline ---------- */
+#timeline{position:fixed;left:392px;right:12px;bottom:12px;height:52px;z-index:14;padding:6px 12px 6px 12px;display:flex;align-items:center;gap:10px}
+#timeline .lab{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);width:92px;line-height:1.25}
+#timeline .lab b{display:block;font-size:13px;color:var(--ink);letter-spacing:0;text-transform:none}
+#tl{flex:1;height:40px;touch-action:none;cursor:ew-resize;display:block}
+#tl .ax{font:600 9.5px var(--font);fill:var(--ink3)}
+
+/* ---------- captions, title, toast, keys ---------- */
+#caption{position:fixed;left:50%;bottom:136px;transform:translateX(-50%) translateY(8px);width:max-content;max-width:min(860px,calc(100vw - 32px));
+  padding:14px 20px;border-radius:16px;z-index:30;opacity:0;transition:opacity .45s ease,transform .45s ease;pointer-events:none;text-align:center}
+#caption.on{opacity:1;transform:translateX(-50%) translateY(0)}
+#caption .k{font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+#caption .t{font-size:19px;font-weight:650;letter-spacing:-.01em;line-height:1.35;margin-top:3px}
+#caption .a{font-size:11.5px;color:var(--ink3);margin-top:4px}
+#progress{position:fixed;left:0;right:0;top:0;height:3px;z-index:31;background:transparent;pointer-events:none}
+#progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,#ffb020,#ff6b5b,#a78bfa)}
+#title{position:fixed;inset:0;display:grid;place-items:center;z-index:40;pointer-events:none;transition:opacity 1.1s ease}
+#title.off{opacity:0}
+#title .card{text-align:center;color:#fff;text-shadow:0 2px 24px rgba(0,0,0,.45);padding:24px}
+#title .eb{font-size:12px;font-weight:800;letter-spacing:.32em;text-transform:uppercase;color:#ffcf70}
+#title h1{font-size:clamp(34px,6vw,64px);margin:10px 0 6px;letter-spacing:-.035em;line-height:1.02;font-weight:780}
+#title p{margin:0;font-size:clamp(14px,1.8vw,18px);color:rgba(255,255,255,.86)}
+#title .facts{display:flex;gap:10px 22px;justify-content:center;flex-wrap:wrap;margin-top:22px;font-size:13px;color:rgba(255,255,255,.82)}
+#title .facts b{display:block;font-size:24px;color:#fff;letter-spacing:-.02em}
+#title .sim{margin-top:18px;font-size:11.5px;color:rgba(255,255,255,.6)}
+#veil{position:fixed;inset:0;z-index:39;pointer-events:none;background:radial-gradient(ellipse at center,rgba(5,9,18,.25),rgba(5,9,18,.75));transition:opacity 1.4s ease}
+#veil.off{opacity:0}
+#toast{position:fixed;left:50%;top:76px;transform:translateX(-50%) translateY(-8px);z-index:35;padding:10px 16px;border-radius:12px;
+  font-size:13px;font-weight:600;opacity:0;transition:all .3s ease;pointer-events:none;max-width:calc(100% - 40px);text-align:center}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+#keys{position:fixed;right:14px;bottom:72px;z-index:13;font-size:11px;color:var(--ink3);padding:6px 10px;border-radius:10px;display:none}
+.fine #keys{display:block}
+#keys kbd{font:600 10.5px var(--font);border:1px solid var(--hair);border-radius:4px;padding:0 5px;margin:0 2px 0 8px;color:var(--ink2)}
+#exitbar{position:fixed;top:14px;right:14px;z-index:41;display:none;gap:8px}
+#exitbar .btn{background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--hair)}
+.loading{position:fixed;inset:0;display:grid;place-items:center;z-index:50;color:#cbd5e1;font-size:13px;background:#0b1220;transition:opacity .6s}
+.loading.off{opacity:0;pointer-events:none}
+.err{max-width:420px;text-align:center;line-height:1.5;padding:20px}
+
+/* map labels drawn as DOM */
+.mlabel{font:700 11.5px var(--font);padding:5px 9px;border-radius:9px;background:var(--glass-strong);color:var(--ink);border:1px solid var(--hair);
+  box-shadow:0 4px 14px rgba(0,0,0,.18);white-space:nowrap;pointer-events:none;transform:translateY(-14px)}
+.mlabel.green{background:#059669;color:#fff;border-color:transparent}
+.mlabel.red{background:#dc2626;color:#fff;border-color:transparent}
+.mlabel.violet{background:#7c3aed;color:#fff;border-color:transparent}
+.mlabel small{font-weight:600;opacity:.8;margin-left:6px}
+.maplibregl-ctrl-attrib{font-size:10px!important}
+.maplibregl-ctrl-bottom-right{bottom:68px!important;right:4px}
+.deck-tooltip{font:600 12px var(--font)!important;border-radius:10px!important;padding:8px 10px!important;max-width:280px;
+  background:var(--glass-strong)!important;color:var(--ink)!important;border:1px solid var(--hair);box-shadow:var(--shadow)}
+
+/* ---------- present / cover modes ---------- */
+body.cinema #panel,body.cinema #detail,body.cinema #ask,body.cinema #timeline,body.cinema #keys,body.cinema .actions,body.cinema #modes,
+body.cinema .speeds,body.cinema .maplibregl-ctrl-bottom-right{opacity:0;pointer-events:none;transition:opacity .5s}
+body.cinema #exitbar{display:flex}
+body.cinema .clock .iconbtn{display:none}
+body.cover #panel,body.cover #ask,body.cover #keys,body.cover #detail{display:none}
+body.cover #exitbar{display:flex}
+body.cover #timeline{left:12px}
+
+/* ---------- medium widths ---------- */
+.brand b{white-space:nowrap}
+@media (max-width:1320px){.tab kbd,.brand small{display:none}.tab{padding:0 11px}#keys{display:none!important}}
+@media (max-width:1280px) and (min-width:761px){.brand>div:last-child{display:none}.brand{padding:8px 10px}}
+@media (max-width:1120px) and (min-width:761px){.brand>div:last-child{display:none}.brand{padding:8px 10px}.speeds button{min-width:34px;padding:0 5px}
+  #panel{width:330px}#timeline{left:354px}#ask{min-width:300px;width:calc(100% - 720px)}}
+
+/* ---------- phone ---------- */
+@media (max-width:760px){
+  html,body{font-size:15px}
+  #top{top:calc(8px + env(safe-area-inset-top));left:8px;right:8px;gap:6px}
+  .brand{height:48px;padding:6px 10px 6px 8px}
+  .brand small,.brand>div:last-child,#modes,.actions .wide,.speeds,.tab kbd{display:none}
+  .brand{width:48px;justify-content:center;padding:0}
+  .clock{height:48px;margin-left:auto;padding:4px}
+  .time{min-width:70px;padding:0 4px}.time b{font-size:18px}
+  .actions{height:48px;padding:4px}
+  #ask{left:8px;right:8px;width:auto;min-width:0;transform:none;top:calc(64px + env(safe-area-inset-top));bottom:auto}
+  #ask .in{height:46px}
+  #ask kbd{display:none}
+  #panel{top:auto;left:0;right:0;bottom:0;width:auto;height:var(--sheet,236px);border-radius:20px 20px 0 0;
+    transition:height .38s cubic-bezier(.2,.8,.2,1);padding-bottom:env(safe-area-inset-bottom)}
+  #panel .handle{display:block;width:100%;height:24px;position:relative;flex:none;touch-action:none}
+  #panel .handle::after{content:"";position:absolute;left:50%;top:9px;width:40px;height:5px;border-radius:3px;background:var(--track);transform:translateX(-50%)}
+  .sheet-tabs{display:flex;gap:4px;overflow-x:auto;padding:0 12px 4px;scrollbar-width:none;flex:none}
+  .sheet-tabs::-webkit-scrollbar{display:none}
+  .sheet-tabs .tab{height:38px;padding:0 13px;font-size:13px;background:var(--chip)}
+  .sheet-tabs .tab[aria-selected="true"]{background:var(--chip-on)}
+  #panel .head{padding:8px 16px 2px}
+  #panel h2{font-size:17px}
+  #panel .body{padding:4px 16px 24px}
+  #detail{top:auto;left:0;right:0;bottom:0;width:auto;max-height:62vh;border-radius:20px 20px 0 0;z-index:25;padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+  #timeline{left:8px;right:8px;bottom:calc(var(--sheet,236px) + 8px);height:46px;padding:4px 10px;transition:bottom .38s cubic-bezier(.2,.8,.2,1)}
+  #timeline .lab{width:62px}
+  #caption{bottom:calc(32px + env(safe-area-inset-bottom));padding:12px 14px}
+  #caption .t{font-size:15.5px}
+  .maplibregl-ctrl-bottom-right{display:none}
+  body.cinema #timeline{opacity:0}
+  #toast{top:calc(118px + env(safe-area-inset-top))}
+}
+@media (prefers-reduced-motion:reduce){#caption,#title,#veil,#toast{transition:none}}
+</style>
+</head>
+<body>
+<div id="map" role="application" aria-label="Map of Baku's bus network and bike lanes"></div>
+<div class="loading" id="loading"><div>Loading the twin…</div></div>
+<div id="veil"></div>
+<div id="title"><div class="card">
+  <div class="eb">Digital twin</div>
+  <h1>Baku Mobility Twin</h1>
+  <p>Buses and bicycles, mirrored in one model of the city</p>
+  <div class="facts" id="titleFacts"></div>
+  <div class="sim">Network from the city's bus and bike data · timetable simulated, assumptions stated</div>
+</div></div>
+<div id="progress"><i></i></div>
+
+<header id="top">
+  <div class="brand glass"><div class="mark"><i></i></div><div><b>Baku Mobility Twin</b><small>buses and bicycles</small></div></div>
+  <nav id="modes" class="glass" role="tablist" aria-label="Twin modes"></nav>
+  <div class="clock glass">
+    <button class="iconbtn" id="play" aria-label="Pause the clock" title="Pause or run the clock (Space)"></button>
+    <div class="time"><b class="num" id="clockT">--:--</b><small id="clockS">Simulated</small></div>
+    <div class="speeds" role="group" aria-label="Clock speed"></div>
+  </div>
+  <div class="actions glass">
+    <button class="iconbtn wide" id="btnDay" title="Play the day, 00:00 to 23:59 (D)" aria-label="Play the day"></button>
+    <button class="iconbtn wide" id="btnPresent" title="Present: the 48-second story (P)" aria-label="Present"></button>
+    <button class="iconbtn" id="btnFull" title="Full screen (F)" aria-label="Full screen"></button>
+    <button class="iconbtn" id="btnTheme" title="Theme: follows the sun, light or dark" aria-label="Theme"></button>
+  </div>
+</header>
+
+<aside id="panel" class="glass" aria-live="polite">
+  <div class="handle" role="button" aria-label="Resize the panel" tabindex="0"></div>
+  <nav class="sheet-tabs" role="tablist" aria-label="Twin modes"></nav>
+  <div class="head"></div>
+  <div class="body"></div>
+</aside>
+<section id="detail" class="glass hidden" aria-live="polite"></section>
+<div id="ask" class="glass">
+  <div class="in">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4z"/></svg>
+    <input id="askIn" type="text" autocomplete="off" spellcheck="false" placeholder="Ask the twin — “rush hour”, “where are the gaps”, “line 88”…" aria-label="Ask the twin">
+    <kbd>/</kbd>
+  </div>
+  <ul id="askList" class="hidden" role="listbox"></ul>
+</div>
+<footer id="timeline" class="glass">
+  <div class="lab">Buses on the road<b class="num" id="tlNow">—</b></div>
+  <svg id="tl" role="slider" aria-label="Time of day" tabindex="0"></svg>
+</footer>
+<div id="caption" class="glass" role="status"><div class="k"></div><div class="t"></div><div class="a"></div></div>
+<div id="toast" class="glass" role="status"></div>
+<div id="keys" class="glass"><kbd>Space</kbd>pause<kbd>D</kbd>play the day<kbd>P</kbd>present<kbd>F</kbd>full screen<kbd>/</kbd>ask</div>
+<div id="exitbar"><button class="btn" id="exitBtn">Exit <span class="faint">Esc</span></button></div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/deck.gl@9.0.38/dist.min.js"></script>
+<script>const DATA=/*__DATA__*/null;</script>
+<script>
+(() => {
+'use strict';
+const D = DATA;
+
+/* =========================================================================================== helpers */
+const $ = (s, el = document) => el.querySelector(s);
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
+const RAD = Math.PI / 180;
+const fmt = (x, d = 0) => (x == null || !isFinite(x)) ? '—' : Number(x).toLocaleString('en-GB', { maximumFractionDigits: d, minimumFractionDigits: d });
+const kmStr = m => fmt(m / 1000, m < 10000 ? 1 : 0) + ' km';
+const pad = n => String(n).padStart(2, '0');
+const hhmm = t => { t = ((t % 1440) + 1440) % 1440; return pad(Math.floor(t / 60)) + ':' + pad(Math.floor(t % 60)); };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const norm = s => String(s).toLowerCase().replace(/ə/g, 'e').replace(/ı/g, 'i').replace(/ğ/g, 'g').replace(/ş/g, 's')
+  .replace(/ç/g, 'c').replace(/ö/g, 'o').replace(/ü/g, 'u').normalize('NFD').replace(/[̀-ͯ]/g, '');
+function hash01(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return ((h >>> 0) % 100000) / 100000; }
+function hav(lon1, lat1, lon2, lat2) {
+  const dLat = (lat2 - lat1) * RAD, dLon = (lon2 - lon1) * RAD;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * RAD) * Math.cos(lat2 * RAD) * Math.sin(dLon / 2) ** 2;
+  return 12742017.6 * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+// a local plane around Baku for short distances (metres); good to well under 1% across Absheron
+const LON0 = 49.8671, LAT0 = 40.4093, KX = 111320 * Math.cos(LAT0 * RAD), KY = 110574;
+const toXY = (lon, lat) => [(lon - LON0) * KX, (lat - LAT0) * KY];
+const toLL = (x, y) => [x / KX + LON0, y / KY + LAT0];
+const ICON = {
+  play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4.2" height="14" rx="1.2"/><rect x="13.8" y="5" width="4.2" height="14" rx="1.2"/></svg>',
+  day: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+  present: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4M10 8.5v4l3.5-2z"/></svg>',
+  full: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4"/></svg>',
+  theme: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg>',
+  close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+};
+
+/* =========================================================================================== assumptions
+   The data holds the network: route geometry, stops, each line's run time and service type. It holds no timetable,
+   no ridership and no live positions, so the twin simulates the timetable from the assumptions below and says so. */
+const ZONES = {   // rgb glows on the night map, day is the deeper shade that reads on the light one
+  1: { en: 'City', hp: 10, ho: 15, s: 360, e: 1410, rgb: [255, 170, 30], day: [222, 128, 0] },
+  2: { en: 'City express', hp: 12, ho: 18, s: 390, e: 1380, rgb: [255, 98, 82], day: [220, 38, 38] },
+  3: { en: 'Suburban', hp: 15, ho: 25, s: 360, e: 1350, rgb: [40, 186, 250], day: [2, 122, 192] },
+  4: { en: 'Suburban express', hp: 20, ho: 30, s: 390, e: 1320, rgb: [102, 132, 255], day: [79, 70, 229] },
+  5: { en: 'Settlement', hp: 20, ho: 30, s: 390, e: 1290, rgb: [170, 132, 255], day: [124, 58, 237] },
+  6: { en: 'Inter-settlement', hp: 25, ho: 40, s: 390, e: 1290, rgb: [244, 106, 182], day: [219, 39, 119] },
+  7: { en: 'Intercity', hp: 40, ho: 60, s: 420, e: 1260, rgb: [210, 220, 235], day: [71, 85, 105] },
+};
+const A = {
+  bands: [420, 570, 1020, 1170],   // peak hours 07:00–09:30 and 17:00–19:30
+  layover: 0.10,                   // share of a round trip spent at the termini
+  laneGain: 0.20,                  // bus speed gained inside a bus lane
+  stopCap: 90,                     // buses an hour one busy stop can take
+  platoon: 30,                     // seconds between buses below which they run in platoons
+  bikeKmh: 15,
+};
+// traffic: 1 = the run times in the data; below 1 slower (peaks), above 1 faster (night)
+function traffic(t) {
+  t = ((t % 1440) + 1440) % 1440;
+  const g = (mu, s) => Math.exp(-0.5 * ((t - mu) / s) ** 2);
+  return 1.08 - 0.26 * g(495, 50) - 0.30 * g(1095, 60) - 0.06 * g(810, 95);
+}
+const PEAK_F = traffic(495);
+const inPeak = t => (t >= A.bands[0] && t < A.bands[1]) || (t >= A.bands[2] && t < A.bands[3]);
+
+/* =========================================================================================== the model */
+const STATS = D.stats;
+const lines = D.lines.map((l, i) => Object.assign(l, { i, z: ZONES[l.zoneId] || ZONES[3] }));
+const LINE_PAL = [[255, 176, 32], [56, 189, 248], [167, 139, 250], [52, 211, 153], [244, 114, 182], [251, 146, 60], [96, 165, 250],
+  [250, 204, 21], [45, 212, 191], [232, 121, 249], [248, 113, 113], [163, 230, 53]];
+for (const l of lines) l.pal = LINE_PAL[Math.floor(hash01('line ' + l.n) * LINE_PAL.length)];
+const routes = D.routes.map((r, i) => {
+  const L = lines[r.line], n = r.path.length, cum = new Float64Array(n), flat = new Float64Array(n * 2);
+  for (let k = 0; k < n; k++) {
+    flat[2 * k] = r.path[k][0]; flat[2 * k + 1] = r.path[k][1];
+    if (k) cum[k] = cum[k - 1] + hav(r.path[k - 1][0], r.path[k - 1][1], r.path[k][0], r.path[k][1]);
+  }
+  const len = cum[n - 1], vmpm = len / L.min;    // each direction takes the line's run time from the data
+  return Object.assign(r, { i, L, cum, len, flat, vmpm, kmh: vmpm * 0.06, phase: hash01(L.n + '/' + r.dir) });
+});
+const stops = D.stops.map((s, i) => Object.assign(s, { i }));
+const served = stops.filter(s => s.lines.length);
+const stations = D.stations.map((s, i) => Object.assign(s, { i }));
+const stopRoutes = stops.map(() => []);
+routes.forEach(r => r.stops.forEach(([si, d]) => stopRoutes[si].push([r.i, d])));
+const corridors = D.corridors.map((c, i) => {
+  const flat = c.path.flat(); let m = 0;
+  for (let k = 1; k < c.path.length; k++) m += hav(c.path[k - 1][0], c.path[k - 1][1], c.path[k][0], c.path[k][1]);
+  return Object.assign(c, { i, flat, runsByRoute: new Map(c.stretches.map(([ri, runs]) => [ri, runs])), linesOne: new Set(c.stretches.filter(x => x[2] > 0).map(([ri]) => D.routes[ri].line)).size });
+});
+// a closure on a corridor is placed at its busiest stop: where an incident hurts the most lines
+corridors.forEach(c => {
+  const best = c.stops.map(i => stops[i]).sort((a, b) => b.lines.length - a.lines.length)[0];
+  c.closeAt = best ? { lon: best.lon, lat: best.lat, name: best.name } : { lon: c.centre[0], lat: c.centre[1], name: c.name };
+});
+const P = D.proposal;
+P.cum = [0]; for (let k = 1; k < P.path.length; k++) P.cum.push(P.cum[k - 1] + hav(P.path[k - 1][0], P.path[k - 1][1], P.path[k][0], P.path[k][1]));
+const gaps = STATS.gaps.map(i => stops[i]);
+const lineColor = (l, mode) => mode === 'line' ? l.pal : (S.night > 0.5 ? l.z.rgb : l.z.day);
+
+/* =========================================================================================== scenario state */
+const S = {
+  mode: 'mirror', t: 495, speed: 60, playing: true, colorMode: 'type', sel: null, hover: null,
+  layers: { buses: true, stops: true, lanes: true, lanes2025: false, mpv: true, mps: true, bikes: true, buildings: true },
+  headMul: 1, lineHead: new Map(),        // peak-headway overrides, minutes, by line
+  lane: null,                             // { c: corridor index, gain }
+  closure: null,                          // { lon, lat, r, res }
+  azadliq: false, propReveal: 0, newStations: 0, closeMode: false,
+  scn: 'lane', understand: 'corridors', themePref: 'auto', night: 0, tier: 2,
+};
+let svcVersion = 0, svcData = [], bikeData = [];
+
+/* =========================================================================================== the simulated timetable */
+function plan(r) {
+  const z = r.L.z, override = S.lineHead.get(r.line);
+  const hp = override ? override : z.hp * S.headMul;
+  const ho = override ? override * z.ho / z.hp : z.ho * S.headMul;
+  r.hp = hp; r.ho = ho;
+  r.S = z.s + ((r.phase + (r.dir === 2 ? 0.5 : 0)) % 1) * hp;   // first departures spread across the first headway
+  r.E = z.e;
+}
+// departures (as a continuous count) between the first one and tau, with peak and off-peak headways
+function ndep(tau, s0, hp, ho) {
+  if (tau <= s0) return 0;
+  const b = A.bands;
+  return Math.max(0, Math.min(tau, b[0]) - s0) / ho + Math.max(0, Math.min(tau, b[1]) - Math.max(s0, b[0])) / hp
+    + Math.max(0, Math.min(tau, b[2]) - Math.max(s0, b[1])) / ho + Math.max(0, Math.min(tau, b[3]) - Math.max(s0, b[2])) / hp
+    + Math.max(0, tau - Math.max(s0, b[3])) / ho;
+}
+function tdep(k, s0, hp, ho) {
+  const b = A.bands;
+  const a0 = Math.max(0, b[0] - s0) / ho; if (k < a0) return s0 + k * ho;
+  const s1 = Math.max(s0, b[0]), a1 = a0 + Math.max(0, b[1] - s1) / hp; if (k < a1) return s1 + (k - a0) * hp;
+  const s2 = Math.max(s0, b[1]), a2 = a1 + Math.max(0, b[2] - s2) / ho; if (k < a2) return s2 + (k - a1) * ho;
+  const s3 = Math.max(s0, b[2]), a3 = a2 + Math.max(0, b[3] - s3) / hp; if (k < a3) return s3 + (k - a2) * hp;
+  return Math.max(s0, b[3]) + (k - a3) * ho;
+}
+const headwayAt = (r, t) => inPeak(t) ? r.hp : r.ho;
+
+// run time along the route, vertex by vertex: the data's speed, faster inside an applied bus lane
+function laneGainAt(r, od) {
+  if (!S.lane || od < 0) return 1;
+  const runs = corridors[S.lane.c].runsByRoute.get(r.i);
+  if (!runs) return 1;
+  for (const [a, b] of runs) if (od >= a && od <= b) return 1 + S.lane.gain;
+  return 1;
+}
+function buildService(r) {
+  const g = r.geo || { flat: r.flat, cum: r.cum, od: null };
+  const n = g.cum.length, times = new Float32Array(n), kmh = new Float32Array(n);
+  let acc = 0;
+  for (let k = 1; k < n; k++) {
+    const od = g.od ? (g.od[k - 1] >= 0 && g.od[k] >= 0 ? (g.od[k - 1] + g.od[k]) / 2 : -1) : (g.cum[k - 1] + g.cum[k]) / 2;
+    const gain = laneGainAt(r, od);
+    acc += (g.cum[k] - g.cum[k - 1]) / (r.vmpm * gain);
+    times[k] = acc;
+    kmh[k - 1] = (r.line + 1) * 2048 + (gain > 1 ? 1024 : 0) + Math.min(999, r.kmh * gain);
+  }
+  kmh[n - 1] = kmh[Math.max(0, n - 2)];
+  r.run = acc;
+  r.svc = { r, flat: g.flat, times, pack: kmh, sched: [r.hp, r.ho, r.S, r.E] };
+}
+function rebuildAll() {
+  routes.forEach(r => { plan(r); buildService(r); });
+  svcData = routes.map(r => r.svc);
+  svcVersion++;
+  daySeries = null;
+}
+function buildBikes() {
+  bikeData = [];
+  D.lanes.forEach((l, i) => {
+    const n = l.path.length, cum = new Float64Array(n);
+    for (let k = 1; k < n; k++) cum[k] = cum[k - 1] + hav(l.path[k - 1][0], l.path[k - 1][1], l.path[k][0], l.path[k][1]);
+    for (const dir of [0, 1]) {
+      const pts = dir ? [...l.path].reverse() : l.path, flat = new Float64Array(n * 2), times = new Float32Array(n), pack = new Float32Array(n).fill(A.bikeKmh);
+      let acc = 0;
+      for (let k = 0; k < n; k++) {
+        flat[2 * k] = pts[k][0]; flat[2 * k + 1] = pts[k][1];
+        if (k) { acc += (dir ? cum[n - k] - cum[n - k - 1] : cum[k] - cum[k - 1]) / (A.bikeKmh * 1000 / 60); times[k] = acc; }
+      }
+      const ph = hash01(l.name + i + dir);
+      bikeData.push({ flat, times, pack, sched: [1.6, 3.2, 330 + ph * 3, 1380] });
+    }
+  });
+}
+// buses on the road on one route at minute t (continuous; summed and rounded for display)
+function onRoad(r, t, f) {
+  const R = r.run / f;
+  let n = 0;
+  for (const tt of t < 300 ? [t, t + 1440] : [t]) {
+    const hi = Math.min(tt, r.E), lo = Math.max(r.S, tt - R);
+    if (hi > lo) n += ndep(hi, r.S, r.hp, r.ho) - ndep(lo, r.S, r.hp, r.ho);
+  }
+  return n;
+}
+function snapshot(t) {
+  const f = traffic(t);
+  let fleet = 0, v = 0, h = 0, hn = 0;
+  const running = new Set();
+  for (const r of routes) {
+    const n = onRoad(r, t, f);
+    if (n > 0.05) { fleet += n; v += n * r.kmh * f * (r.run ? r.len / r.vmpm / r.run : 1); running.add(r.line); }
+    if (t >= r.S && t <= r.E) { h += headwayAt(r, t); hn++; }
+  }
+  return { fleet: Math.round(fleet), lines: running.size, kmh: fleet ? v / fleet : 0, head: hn ? h / hn : 0, f };
+}
+let daySeries = null;
+function series() {
+  if (!daySeries) { daySeries = []; for (let t = 0; t <= 1440; t += 10) daySeries.push(snapshot(t).fleet); }
+  return daySeries;
+}
+// a line's peak fleet: its round trip at peak traffic plus layover, divided by the peak headway
+function lineFleet(li) {
+  const rs = lines[li].routes.map(i => routes[i]);
+  if (!rs.length) return 0;
+  const cycle = rs.reduce((a, r) => a + r.run / PEAK_F, 0) * (rs.length === 1 ? 2 : 1) * (1 + A.layover);
+  return Math.ceil(cycle / rs[0].hp);
+}
+const fleetNeeded = () => lines.reduce((a, l) => a + lineFleet(l.i), 0);
+// buses an hour through each stop now, from every route that serves it
+function stopFlows(t) {
+  const out = new Float32Array(stops.length);
+  for (const r of routes) {
+    if (t < r.S || t > r.E + r.run) continue;
+    const per = 60 / headwayAt(r, t);
+    for (const [si] of r.stops) out[si] += per;
+  }
+  return out;
+}
+// buses an hour along a corridor now, in its busier direction
+function corridorFlow(c, t) {
+  let a = 0, b = 0;
+  for (const [ri, , way] of c.stretches) { const r = routes[ri]; if (t >= r.S && t <= r.E + r.run) { if (way > 0) a += 60 / headwayAt(r, t); else b += 60 / headwayAt(r, t); } }
+  return Math.max(a, b);
+}
+// the next simulated buses at a stop
+function nextBuses(si, t) {
+  const f = traffic(t), out = [];
+  for (const [ri, d] of stopRoutes[si]) {
+    const r = routes[ri];
+    if (r.geo && r.skipped && r.skipped.has(si)) { out.push({ r, wait: null }); continue; }
+    const k0 = binIdx(r.cum, d), fr = (d - r.cum[k0]) / Math.max(1e-6, r.cum[k0 + 1] - r.cum[k0]);
+    const tt = r.geo ? r.cum[k0] / r.vmpm : r.svc.times[k0] + (r.svc.times[Math.min(k0 + 1, r.svc.times.length - 1)] - r.svc.times[k0]) * fr;
+    const tau = t - tt / f;
+    let k = tau < r.S ? 0 : Math.floor(ndep(Math.min(tau, r.E), r.S, r.hp, r.ho) + 1e-6) + 1;
+    const T = tdep(k, r.S, r.hp, r.ho);
+    out.push({ r, wait: T <= r.E ? T + tt / f - t : null });
+  }
+  return out.sort((a, b) => (a.wait ?? 1e9) - (b.wait ?? 1e9));
+}
+function binIdx(cum, d) { let lo = 0, hi = cum.length - 2; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (cum[m] <= d) lo = m; else hi = m - 1; } return Math.max(0, lo); }
+
+/* =========================================================================================== scenarios */
+// 1. a bus lane on a corridor: what it saves per trip, per day and in peak fleet
+function laneResult(ci, gain) {
+  const c = corridors[ci];
+  let dayMin = 0, peakTrip = 0, freed = 0;
+  const perLine = new Map();
+  for (const [ri, runs] of c.stretches) {
+    const r = routes[ri], m = runs.reduce((a, [x, y]) => a + (y - x), 0);
+    const base = m / r.vmpm, save = base * gain / (1 + gain);
+    const ndays = Math.floor(ndep(r.E, r.S, r.hp, r.ho) + 1e-6) + 1;
+    for (let k = 0; k < ndays; k++) { const T = tdep(k, r.S, r.hp, r.ho) + runs[0][0] / r.vmpm; dayMin += save / traffic(T); }
+    peakTrip = Math.max(peakTrip, base / PEAK_F);
+    perLine.set(r.line, (perLine.get(r.line) || 0) + save / PEAK_F);
+  }
+  for (const [li, s] of perLine) {
+    const rs = lines[li].routes.map(i => routes[i]);
+    const noLane = r => (r.geo ? r.geo.cum[r.geo.cum.length - 1] : r.len) / r.vmpm;
+    const cycle = rs.reduce((a, r) => a + noLane(r) / PEAK_F, 0) * (rs.length === 1 ? 2 : 1);
+    const hp = rs[0].hp;
+    freed += Math.ceil(cycle * (1 + A.layover) / hp) - Math.ceil((cycle - s) * (1 + A.layover) / hp);
+  }
+  return { lines: c.lines.length, busHours: dayMin / 60, freed, tripBefore: peakTrip, tripAfter: peakTrip / (1 + gain), m: c.m };
+}
+// 3. a closure: lines detoured around it on streets other lines already use
+let G = null;
+function graph() {
+  if (G) return G;
+  const CELL = 20, STEP = 10, id = new Map(), X = [], Y = [], C = [], E = [], KX2 = [], KY2 = [];
+  const key = (x, y) => (Math.floor(x / CELL) + 40000) * 80000 + (Math.floor(y / CELL) + 40000);
+  for (const r of routes) {
+    let prev = -1, k = 0;
+    r.samples = [];
+    for (let d = 0; d <= r.len; d += STEP) {
+      while (k < r.cum.length - 2 && r.cum[k + 1] < d) k++;
+      const f = (d - r.cum[k]) / Math.max(1e-6, r.cum[k + 1] - r.cum[k]);
+      const lon = r.path[k][0] + (r.path[k + 1][0] - r.path[k][0]) * f, lat = r.path[k][1] + (r.path[k + 1][1] - r.path[k][1]) * f;
+      const [x, y] = toXY(lon, lat), kk = key(x, y);
+      let n = id.get(kk);
+      if (n === undefined) { n = X.length; id.set(kk, n); X.push(x); Y.push(y); C.push(1); E.push([]); KX2.push(Math.floor(x / CELL)); KY2.push(Math.floor(y / CELL)); } else { X[n] += x; Y[n] += y; C[n]++; }
+      if (prev >= 0 && prev !== n) { if (!E[prev].includes(n)) E[prev].push(n); if (!E[n].includes(prev)) E[n].push(prev); }
+      r.samples.push([d, n, x, y]);
+      prev = n;
+    }
+  }
+  for (let n = 0; n < X.length; n++) { X[n] /= C[n]; Y[n] /= C[n]; }
+  // routes that cross or touch without sharing a cell still connect: neighbouring cells whose centres are close
+  for (let n = 0; n < X.length; n++) for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+    if (!dx && !dy) continue;
+    const m = id.get((KX2[n] + dx + 40000) * 80000 + (KY2[n] + dy + 40000));
+    if (m !== undefined && m > n && Math.hypot(X[n] - X[m], Y[n] - Y[m]) <= 22 && !E[n].includes(m)) { E[n].push(m); E[m].push(n); }
+  }
+  const N = X.length;
+  G = { X: Float64Array.from(X), Y: Float64Array.from(Y), E, N, g: new Float64Array(N), from: new Int32Array(N), seen: new Int32Array(N), stamp: 0 };
+  return G;
+}
+function astar(src, dst, blocked) {
+  const { X, Y, E, g, from, seen } = G, stamp = ++G.stamp;
+  const h = n => Math.hypot(X[n] - X[dst], Y[n] - Y[dst]);
+  const heap = [[h(src), src]];
+  seen[src] = stamp; g[src] = 0; from[src] = -1;
+  let pops = 0;
+  while (heap.length && pops++ < 250000) {
+    const [, u] = heapPop(heap);
+    if (u === dst) { const path = []; for (let n = dst; n >= 0; n = from[n]) path.push(n); return path.reverse(); }
+    for (const v of E[u]) {
+      if (blocked[v]) continue;
+      const nd = g[u] + Math.hypot(X[u] - X[v], Y[u] - Y[v]);
+      if (seen[v] !== stamp || nd < g[v]) { seen[v] = stamp; g[v] = nd; from[v] = u; heapPush(heap, [nd + h(v), v]); }
+    }
+  }
+  return null;
+}
+function heapPush(h, x) { h.push(x); let i = h.length - 1; while (i) { const p = (i - 1) >> 1; if (h[p][0] <= h[i][0]) break; [h[p], h[i]] = [h[i], h[p]]; i = p; } }
+function heapPop(h) {
+  const top = h[0], last = h.pop();
+  if (h.length) { h[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < h.length && h[l][0] < h[m][0]) m = l; if (r < h.length && h[r][0] < h[m][0]) m = r; if (m === i) break; [h[m], h[i]] = [h[i], h[m]]; i = m; } }
+  return top;
+}
+function closeAt(lon, lat, radius) {
+  graph();
+  const [cx, cy] = toXY(lon, lat), { X, Y, N } = G;
+  const blocked = new Uint8Array(N);
+  for (let n = 0; n < N; n++) if (Math.hypot(X[n] - cx, Y[n] - cy) < radius) blocked[n] = 1;
+  const res = { lon, lat, r: radius, routes: [], lines: new Set(), closedStops: [], skipped: new Set(), extra: [], cut: 0, detours: [] };
+  stops.forEach(s => { if (s.lines.length) { const [x, y] = toXY(s.lon, s.lat); if (Math.hypot(x - cx, y - cy) < radius) res.closedStops.push(s.i); } });
+  for (const r of routes) {
+    const sm = r.samples; let i0 = -1, i1 = -1;
+    for (let i = 0; i < sm.length; i++) if (Math.hypot(sm[i][2] - cx, sm[i][3] - cy) < radius) { if (i0 < 0) i0 = i; i1 = i; }
+    if (i0 < 0) continue;
+    res.lines.add(r.line);
+    const a = i0 - 6, b = i1 + 6;
+    if (a < 0 || b >= sm.length) { res.cut++; res.routes.push({ r, cut: true }); continue; }
+    const path = astar(sm[a][1], sm[b][1], blocked);
+    if (!path) { res.cut++; res.routes.push({ r, cut: true }); continue; }
+    const da = sm[a][0], db = sm[b][0];
+    let dlen = 0; const pts = [];
+    for (let k = 0; k < path.length; k++) { const n = path[k]; pts.push(toLL(G.X[n], G.Y[n])); if (k) dlen += Math.hypot(G.X[n] - G.X[path[k - 1]], G.Y[n] - G.Y[path[k - 1]]); }
+    // a detour several times longer than the closed stretch is not one a bus would run: the line turns short instead
+    if (dlen > 3 * (db - da) + 2500) { res.cut++; res.routes.push({ r, cut: true }); continue; }
+    const skipped = r.stops.filter(([, d]) => d > da && d < db).map(([si]) => si);
+    skipped.forEach(si => res.skipped.add(si));
+    res.routes.push({ r, da, db, pts, extra: dlen - (db - da), skipped });
+    res.extra.push((dlen - (db - da)) / r.vmpm);
+    res.detours.push(pts);
+  }
+  res.closedStops.forEach(si => res.skipped.delete(si));
+  res.detLines = new Set(res.routes.filter(x => !x.cut).map(x => x.r.line));
+  res.cutLines = new Set(res.routes.filter(x => x.cut).map(x => x.r.line));
+  res.avgExtra = res.extra.length ? res.extra.reduce((a, b) => a + b, 0) / res.extra.length : 0;
+  res.maxExtra = res.extra.length ? Math.max(...res.extra) : 0;
+  return res;
+}
+function applyClosure(res) {
+  for (const r of routes) { r.geo = null; r.skipped = null; }
+  if (res) for (const x of res.routes) {
+    const r = x.r;
+    if (x.cut) continue;
+    // the route with the closed stretch swapped for the detour
+    const pts = [], od = [];
+    for (let k = 0; k < r.path.length && r.cum[k] < x.da; k++) { pts.push(r.path[k]); od.push(r.cum[k]); }
+    pts.push(pointAt(r, x.da)); od.push(x.da);
+    const smooth2 = chaikin(x.pts);
+    for (const p of smooth2) { pts.push(p); od.push(-1); }
+    pts.push(pointAt(r, x.db)); od.push(x.db);
+    for (let k = 0; k < r.path.length; k++) if (r.cum[k] > x.db) { pts.push(r.path[k]); od.push(r.cum[k]); }
+    const n = pts.length, flat = new Float64Array(n * 2), cum = new Float64Array(n);
+    for (let k = 0; k < n; k++) { flat[2 * k] = pts[k][0]; flat[2 * k + 1] = pts[k][1]; if (k) cum[k] = cum[k - 1] + hav(pts[k - 1][0], pts[k - 1][1], pts[k][0], pts[k][1]); }
+    r.geo = { flat, cum, od: Float64Array.from(od) };
+    r.skipped = new Set(x.skipped.concat(res.closedStops));
+  }
+  rebuildAll();
+}
+function pointAt(r, d) { const k = binIdx(r.cum, d), f = (d - r.cum[k]) / Math.max(1e-6, r.cum[k + 1] - r.cum[k]); return [lerp(r.path[k][0], r.path[k + 1][0], f), lerp(r.path[k][1], r.path[k + 1][1], f)]; }
+function chaikin(pts) {
+  if (pts.length < 3) return pts;
+  const out = [pts[0]];
+  for (let k = 0; k < pts.length - 1; k++) {
+    const [a, b] = [pts[k], pts[k + 1]];
+    out.push([0.75 * a[0] + 0.25 * b[0], 0.75 * a[1] + 0.25 * b[1]], [0.25 * a[0] + 0.75 * b[0], 0.25 * a[1] + 0.75 * b[1]]);
+  }
+  out.push(pts[pts.length - 1]);
+  return out;
+}
+// 5. new bike stations at the busiest stops that have none within reach
+function stationsResult(n) {
+  const add = gaps.slice(0, n).map(s => toXY(s.lon, s.lat));
+  let covered = 0, busyLeft = 0;
+  const newly = [];
+  for (const s of served) {
+    let ok = s.bike <= STATS.walk;
+    if (!ok && add.length) { const [x, y] = toXY(s.lon, s.lat); ok = add.some(([ax, ay]) => Math.hypot(ax - x, ay - y) <= STATS.walk); if (ok) newly.push(s.i); }
+    if (ok) covered++; else if (s.lines.length >= 10) busyLeft++;
+  }
+  return { covered, busyLeft, newly, before: STATS.stopsBike, busyBefore: gaps.length };
+}
+
+/* =========================================================================================== the sun */
+const BAKU_NOW = Date.now() + 4 * 3600e3;
+const DAY_BAKU = Math.floor(BAKU_NOW / 864e5) * 864e5;          // the Baku date's midnight, on Baku's clock
+const DAY0 = DAY_BAKU - 4 * 3600e3;                               // the same instant in UTC
+const DATE_LABEL = new Date(DAY_BAKU).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+function sunAt(t) {
+  const d = (DAY0 + t * 60e3 - 946728000000) / 864e5;
+  const g = (357.529 + 0.98560028 * d) * RAD, q = 280.459 + 0.98564736 * d;
+  const L = (q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * RAD, e = (23.439 - 0.00000036 * d) * RAD;
+  const ra = Math.atan2(Math.cos(e) * Math.sin(L), Math.cos(L)), dec = Math.asin(Math.sin(e) * Math.sin(L));
+  const gmst = ((18.697374558 + 24.06570982441908 * d) % 24 + 24) % 24;
+  const H = (gmst * 15 + LON0) * RAD - ra, la = LAT0 * RAD;
+  const alt = Math.asin(Math.sin(la) * Math.sin(dec) + Math.cos(la) * Math.cos(dec) * Math.cos(H));
+  const az = Math.atan2(-Math.sin(H), Math.tan(dec) * Math.cos(la) - Math.sin(la) * Math.cos(H));
+  return { alt: alt / RAD, az: ((az / RAD) % 360 + 360) % 360 };
+}
+const nightOf = alt => smooth(5, -7, alt);
+
+/* =========================================================================================== map style: day, night, light, shadows */
+const STYLE_URL = 'https://tiles.openfreemap.org/styles/positron';
+let FIRST_SYMBOL = null;
+const SH_BANDS = [[3, 12, 8], [12, 30, 20], [30, 70, 45], [70, 1000, 110]], SH_STEPS = [0.34, 0.67, 1];
+const COLOR_PROPS = ['background-color', 'fill-color', 'fill-outline-color', 'line-color', 'text-color', 'text-halo-color'];
+let styleColors = [];
+function parseColor(s) {
+  if (typeof s !== 'string') return null;
+  s = s.trim();
+  let m;
+  if ((m = s.match(/^#([0-9a-f]{3,8})$/i))) {
+    let h = m[1]; if (h.length <= 4) h = [...h].map(c => c + c).join('');
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16), h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1];
+  }
+  if ((m = s.match(/^rgba?\(([^)]+)\)$/i))) { const v = m[1].split(',').map(x => parseFloat(x)); return [v[0], v[1], v[2], v[3] ?? 1]; }
+  if ((m = s.match(/^hsla?\(([^)]+)\)$/i))) { const v = m[1].split(',').map(x => parseFloat(x)); return [...hsl2rgb(v[0], v[1] / 100, v[2] / 100), v[3] ?? 1]; }
+  if (s === 'white') return [255, 255, 255, 1];
+  if (s === 'black') return [0, 0, 0, 1];
+  return null;
+}
+function hsl2rgb(h, s, l) {
+  h = ((h % 360) + 360) % 360 / 360;
+  const f = n => { const k = (n + h * 12) % 12, a = s * Math.min(l, 1 - l); return 255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))); };
+  return [f(0), f(8), f(4)];
+}
+function rgb2hsl([r, g, b]) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+  if (mx === mn) return [0, 0, l];
+  const d = mx - mn, s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+  const h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h * 60, s, l];
+}
+const css = c => `rgba(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])},${+(c[3] ?? 1).toFixed(3)})`;
+function nightColor(c, layer, prop) {
+  const [h, s, l] = rgb2hsl(c), a = c[3] ?? 1;
+  if (prop === 'text-color') return [...hsl2rgb(h, s * 0.5, clamp(0.94 - 0.5 * l, 0.6, 0.9)), a];
+  if (prop === 'text-halo-color') return [8, 12, 22, Math.min(a, 0.85)];
+  if (/^water|waterway/.test(layer.id)) return [...hsl2rgb(214, 0.42, 0.07), a];
+  if (layer.type === 'line' && layer['source-layer'] === 'transportation') return [...hsl2rgb(224, 0.2, clamp(0.11 + 0.15 * l, 0.11, 0.26)), a];
+  if (layer.type === 'line') return [...hsl2rgb(222, 0.2, 0.22), a * 0.8];
+  return [...hsl2rgb(224, Math.min(0.32, s * 0.4 + 0.2), 0.05 + 0.07 * l), a];
+}
+function mapColors(v, fn) {
+  if (typeof v === 'string') { const c = parseColor(v); return c ? css(fn(c)) : v; }
+  if (Array.isArray(v)) return v.map(x => mapColors(x, fn));
+  return v;
+}
+function mixValues(day, night, n) {
+  if (typeof day === 'string') { const a = parseColor(day), b = parseColor(night); return a && b ? css(a.map((x, i) => lerp(x, b[i], n))) : day; }
+  if (Array.isArray(day)) return day.map((x, i) => mixValues(x, night[i], n));
+  return day;
+}
+async function loadStyle() {
+  const res = await fetch(STYLE_URL);
+  if (!res.ok) throw new Error('map style ' + res.status);
+  const st = await res.json();
+  st.transition = { duration: 650, delay: 0 };
+  for (const l of st.layers) {
+    if (l.id === 'water') l.paint['fill-color'] = 'rgb(196, 212, 226)';
+    if (l.id === 'background') l.paint['background-color'] = 'rgb(243, 243, 240)';
+  }
+  // a feature without the property fails the comparison, as it did in the legacy filter syntax
+  const guard = e => Array.isArray(e) ? (['<', '<=', '>', '>='].includes(e[0]) ? [e[0], ...e.slice(1).map(x => Array.isArray(x) && x[0] === 'get' ? ['coalesce', x, e[0][0] === '<' ? 1e9 : -1e9] : guard(x))] : e.map(guard)) : e;
+  for (const l of st.layers) if (l.filter) l.filter = guard(l.filter);
+  const at = st.layers.findIndex(l => l.type === 'symbol');
+  FIRST_SYMBOL = st.layers[at].id;
+  for (const layer of st.layers) for (const p of COLOR_PROPS) {
+    const v = layer.paint && layer.paint[p];
+    if (v !== undefined && JSON.stringify(v).match(/#|rgb|hsl/)) styleColors.push({ id: layer.id, p, day: v, night: mapColors(v, c => nightColor(c, layer, p)) });
+  }
+  const height = ['coalesce', ['get', 'render_height'], 6], base = ['coalesce', ['get', 'render_min_height'], 0];
+  const extra = [];
+  SH_BANDS.forEach(([lo, hi], b) => SH_STEPS.forEach((_, s) => extra.push({
+    id: `sh-${b}-${s}`, type: 'fill', source: 'openmaptiles', 'source-layer': 'building', minzoom: 13.4,
+    filter: ['all', ['>=', ['coalesce', ['get', 'render_height'], 0], lo], ['<', ['coalesce', ['get', 'render_height'], 0], hi]],
+    paint: { 'fill-color': '#1b2740', 'fill-opacity': 0, 'fill-antialias': false, 'fill-translate-anchor': 'map', 'fill-translate': [0, 0] },
+  })));
+  extra.push({
+    id: 'street-glow', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation', minzoom: 9,
+    filter: ['match', ['get', 'class'], ['motorway', 'trunk', 'primary', 'secondary', 'tertiary'], true, false],
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: { 'line-color': '#ffb15c', 'line-opacity': 0, 'line-blur': ['interpolate', ['linear'], ['zoom'], 10, 1.5, 16, 6],
+      'line-width': ['interpolate', ['exponential', 1.45], ['zoom'], 9, 0.6, 13, 3, 16, 10, 20, 40] },
+  });
+  extra.push({
+    id: 'building-3d', type: 'fill-extrusion', source: 'openmaptiles', 'source-layer': 'building', minzoom: 13.2,
+    filter: ['!=', ['get', 'hide_3d'], true],
+    paint: {
+      'fill-extrusion-color': '#ece9e2', 'fill-extrusion-opacity': 0.94, 'fill-extrusion-vertical-gradient': true,
+      'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 13.2, 0, 14.3, height],
+      'fill-extrusion-base': ['interpolate', ['linear'], ['zoom'], 13.2, 0, 14.3, base],
+    },
+  });
+  extra.push({
+    id: 'building-windows', type: 'fill-extrusion', source: 'openmaptiles', 'source-layer': 'building', minzoom: 13.2,
+    filter: ['all', ['!=', ['get', 'hide_3d'], true], ['>=', ['coalesce', ['get', 'render_height'], 0], 10]], layout: { visibility: 'none' },
+    paint: { 'fill-extrusion-pattern': 'windows', 'fill-extrusion-opacity': 0, 'fill-extrusion-vertical-gradient': true,
+      'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 13.2, 0, 14.3, height],
+      'fill-extrusion-base': ['interpolate', ['linear'], ['zoom'], 13.2, 0, 14.3, base] },
+  });
+  st.layers.splice(at, 0, ...extra);
+  return st;
+}
+const mpp = z => 40075016.686 * Math.cos(LAT0 * RAD) / (512 * 2 ** z);
+let lastSky = null;
+function applySun(force) {
+  if (!map || !map.isStyleLoaded()) return;
+  const sun = sunAt(S.t), n = nightOf(sun.alt);
+  const key = Math.round(sun.az * 1.5) + ':' + Math.round(sun.alt * 1.5) + ':' + S.tier;
+  if (!force && key === lastSky) return;
+  lastSky = key;
+  S.sun = sun;
+  const low = smooth(18, 2, sun.alt) * (1 - n);    // golden hour
+  const polar = clamp(90 - Math.max(sun.alt, 8), 12, 82);
+  const day = 1 - n;
+  map.setLight({
+    anchor: 'map', position: [1.2, n > 0.6 ? 200 : sun.az, n > 0.6 ? 30 : polar],
+    color: n > 0.6 ? '#9fb3ff' : css(mixRGB([255, 251, 244], [255, 222, 186], low * 0.6)), intensity: lerp(0.18, 0.4, day),
+  });
+  const bDay = mixRGB([240, 238, 233], [242, 226, 206], low * 0.45), bNight = [40, 49, 74];
+  map.setPaintProperty('building-3d', 'fill-extrusion-color', css(mixRGB(bDay, bNight, n)));
+  // lit windows on the taller buildings once it is dark; low buildings stay plain so the night stays calm
+  const win = S.tier >= 1 ? smooth(0.35, 0.95, n) : 0;
+  map.setPaintProperty('building-windows', 'fill-extrusion-opacity', 0.95 * win);
+  map.setLayoutProperty('building-windows', 'visibility', win > 0.01 && S.layers.buildings ? 'visible' : 'none');
+  map.setPaintProperty('street-glow', 'line-opacity', 0.55 * n);
+  map.setSky({
+    'sky-color': css(mixRGB(mixRGB([150, 196, 255], [255, 170, 110], low), [6, 10, 24], n)),
+    'horizon-color': css(mixRGB(mixRGB([228, 238, 252], [255, 210, 160], low), [20, 30, 56], n)),
+    'fog-color': css(mixRGB([238, 241, 245], [11, 17, 32], n)),
+    'sky-horizon-blend': 0.6, 'horizon-fog-blend': 0.5, 'fog-ground-blend': 0.7, 'atmosphere-blend': 0.8,
+  });
+  // shadows: footprints swept away from the sun, longer as it sinks; none at night or on the low quality tier
+  const on = S.tier >= 2 && S.layers.buildings && sun.alt > 2 ? smooth(2, 10, sun.alt) * (1 - n) : 0;
+  const cot = 1 / Math.tan(Math.max(sun.alt, 6) * RAD), ax = -Math.sin(sun.az * RAD), ay = Math.cos(sun.az * RAD);
+  SH_BANDS.forEach(([, , hRep], b) => SH_STEPS.forEach((st, s) => {
+    const id = `sh-${b}-${s}`, L = Math.min(hRep * cot, hRep * 5) * st;
+    map.setPaintProperty(id, 'fill-opacity', ['interpolate', ['linear'], ['zoom'], 13.4, 0, 14.4, 0.085 * on]);
+    map.setPaintProperty(id, 'fill-translate', ['interpolate', ['exponential', 2], ['zoom'], 13, ['literal', [ax * L / mpp(13), ay * L / mpp(13)]], 22, ['literal', [ax * L / mpp(22), ay * L / mpp(22)]]]);
+  }));
+  applyNight(n);
+  // deck lighting for the 3D corridor columns
+  const ca = Math.cos(sun.alt * RAD);
+  sunLight.direction = n > 0.6 ? [0.2, 0.3, -1] : [-Math.sin(sun.az * RAD) * ca, -Math.cos(sun.az * RAD) * ca, -Math.max(0.25, Math.sin(sun.alt * RAD))];
+  sunLight.intensity = lerp(1.6, 0.5, n);
+  ambient.intensity = lerp(1.15, 0.7, n);
+}
+const mixRGB = (a, b, t) => a.map((x, i) => lerp(x, b[i], t));
+let lastNightStep = -1;
+function applyNight(n) {
+  const step = Math.round(n * 12) / 12;
+  S.night = n;
+  if (step !== lastNightStep) {
+    lastNightStep = step;
+    for (const c of styleColors) map.setPaintProperty(c.id, c.p, mixValues(c.day, c.night, step));
+  }
+  const theme = S.themePref === 'auto' ? (n > 0.5 ? 'dark' : 'light') : S.themePref;
+  if (document.documentElement.dataset.theme !== theme) document.documentElement.dataset.theme = theme;
+}
+
+function windowImage() {
+  const W = 64, c = document.createElement('canvas'); c.width = c.height = W;
+  const g = c.getContext('2d');
+  g.fillStyle = '#232c42'; g.fillRect(0, 0, W, W);
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) {
+    const lit = rnd();
+    g.fillStyle = lit > 0.5 ? (lit > 0.88 ? '#ffe4ae' : '#f9bd62') : '#2d3852';
+    g.fillRect(x * 16 + 4, y * 16 + 4, 8, 9);
+  }
+  return g.getImageData(0, 0, W, W);
+}
+
+/* =========================================================================================== deck layers */
+const { MapboxOverlay, PathLayer, ScatterplotLayer, ColumnLayer, TripsLayer, LightingEffect, AmbientLight, DirectionalLight, PathStyleExtension } = deck;
+const ambient = new AmbientLight({ color: [255, 255, 255], intensity: 1.1 });
+const sunLight = new DirectionalLight({ color: [255, 246, 232], intensity: 1.5, direction: [-0.5, -0.5, -1] });
+const lighting = new LightingEffect({ ambient, sunLight });
+const NORMAL_BLEND = { blendColorOperation: 'add', blendColorSrcFactor: 'src-alpha', blendColorDstFactor: 'one-minus-src-alpha',
+  blendAlphaOperation: 'add', blendAlphaSrcFactor: 'one', blendAlphaDstFactor: 'one-minus-src-alpha', depthWriteEnabled: false, depthCompare: 'less-equal' };
+const ADD_BLEND = { ...NORMAL_BLEND, blendColorDstFactor: 'one' };
+
+// The timetable runs on the GPU: every route is one path, and the fragment shader finds, for each point on it, how
+// long ago the last scheduled bus passed (from the headways, the service window and the run time to that point).
+// Points a bus passed within the trail length light up, brightest at the bus. Only uniforms change per frame.
+// WebGL guarantees 16 vertex attributes and PathLayer uses 13, so the schedule packs into one vec4 (peak and
+// off-peak headway, first and last departure) and the per-vertex speed, bus-lane flag and line ride in the stroke
+// width (line+1)*2048 + lane*1024 + km/h; the drawn width is pinned with widthMinPixels = widthMaxPixels.
+class ServiceLayer extends PathLayer {
+  getShaders() {
+    const shaders = super.getShaders();
+    shaders.inject = {
+      'vs:#decl': `
+in float instanceTimes;
+in float instanceNextTimes;
+in vec4 instanceSched;
+out float vRun;
+out float vPack;
+out vec4 vSched;`,
+      'vs:#main-end': `
+vRun = instanceTimes + (instanceNextTimes - instanceTimes) * clamp(vPathPosition.y / max(vPathLength, 1e-6), 0.0, 1.0);
+vPack = instanceStrokeWidths;
+vSched = instanceSched;`,
+      'fs:#decl': `
+uniform float uTime;
+uniform float uTrail;
+uniform float uTraffic;
+uniform vec4 uBands;
+uniform float uSel;
+uniform float uSpeedColor;
+uniform float uNight;
+uniform float uHead;
+uniform float uSolid;
+in float vRun;
+in float vPack;
+in vec4 vSched;
+float gAge;
+float ndep(float tau, float s0, float hp, float ho) {
+  return max(0.0, min(tau, uBands.x) - s0) / ho + max(0.0, min(tau, uBands.y) - max(s0, uBands.x)) / hp
+    + max(0.0, min(tau, uBands.z) - max(s0, uBands.y)) / ho + max(0.0, min(tau, uBands.w) - max(s0, uBands.z)) / hp
+    + max(0.0, tau - max(s0, uBands.w)) / ho;
+}
+float tdep(float k, float s0, float hp, float ho) {
+  float a0 = max(0.0, uBands.x - s0) / ho;
+  if (k < a0) return s0 + k * ho;
+  float s1 = max(s0, uBands.x); float a1 = a0 + max(0.0, uBands.y - s1) / hp;
+  if (k < a1) return s1 + (k - a0) * hp;
+  float s2 = max(s0, uBands.y); float a2 = a1 + max(0.0, uBands.z - s2) / ho;
+  if (k < a2) return s2 + (k - a1) * ho;
+  float s3 = max(s0, uBands.z); float a3 = a2 + max(0.0, uBands.w - s3) / hp;
+  if (k < a3) return s3 + (k - a2) * hp;
+  return max(s0, uBands.w) + (k - a3) * ho;
+}
+vec3 speedRamp(float v) {
+  float x = clamp((v - 9.0) / 14.0, 0.0, 1.0);
+  vec3 slow = vec3(0.96, 0.27, 0.27), mid = vec3(0.98, 0.74, 0.16), fast = vec3(0.16, 0.86, 0.56);
+  return x < 0.5 ? mix(slow, mid, x * 2.0) : mix(mid, fast, x * 2.0 - 1.0);
+}`,
+      'fs:#main-start': `
+{
+  float best = 1e6;
+  for (int day = 0; day < 2; day++) {
+    float tau = uTime + float(day) * 1440.0 - vRun / uTraffic;
+    if (tau < vSched.z) continue;
+    float k = floor(ndep(min(tau, vSched.w), vSched.z, vSched.x, vSched.y) + 1e-4);
+    best = min(best, tau - tdep(k, vSched.z, vSched.x, vSched.y));
+  }
+  if (best > uTrail || best < 0.0) discard;
+  gAge = best / uTrail;
+}`,
+      'fs:DECKGL_FILTER_COLOR': `
+{
+  float a = 1.0 - gAge;
+  float head = smoothstep(1.0 - uHead, 1.0, a);
+  float lineId = floor(vPack / 2048.0 + 1e-3) - 1.0;
+  float rest = vPack - (lineId + 1.0) * 2048.0;
+  float lane = step(1023.5, rest);
+  vec3 base = uSpeedColor > 0.5 ? speedRamp((rest - lane * 1024.0) * uTraffic) : color.rgb;
+  base = mix(base, vec3(0.13, 0.9, 0.55), lane * 0.75);
+  base *= mix(0.9, 1.0, uNight);
+  color.rgb = uNight > 0.5 ? mix(base, vec3(1.0, 0.98, 0.92), head * 0.42) : base * mix(1.0, 0.8, head);
+  color.a *= uSolid > 0.5 ? 1.0 : pow(a, 1.35) * (0.62 + 0.38 * head);
+  if (uSel >= 0.0 && abs(lineId - uSel) > 0.5) color.a *= 0.1;
+}`,
+    };
+    return shaders;
+  }
+  initializeState() {
+    super.initializeState();
+    this.getAttributeManager().addInstanced({
+      times: { size: 1, accessor: 'getTimes', shaderAttributes: { instanceTimes: { vertexOffset: 0 }, instanceNextTimes: { vertexOffset: 1 } } },
+      instanceSched: { size: 4, accessor: 'getSched' },
+    });
+  }
+  draw(params) {
+    const p = this.props;
+    params.uniforms = { ...params.uniforms, uTime: p.time, uTrail: p.trail, uTraffic: p.traffic, uBands: p.bands, uSel: p.sel,
+      uSpeedColor: p.speedColor, uNight: p.night, uHead: p.head, uSolid: p.solid };
+    super.draw(params);
+  }
+}
+ServiceLayer.layerName = 'ServiceLayer';
+ServiceLayer.defaultProps = {
+  getTimes: { type: 'accessor', value: d => d.times },
+  getSched: { type: 'accessor', value: d => d.sched },
+  getWidth: { type: 'accessor', value: d => d.pack },
+  time: 0, trail: 1, traffic: 1, bands: A.bands, sel: -1, speedColor: 0, night: 0, head: 0.1, solid: 0,
+};
+
+let map, overlay, zoom = 12;
+const DASH = new PathStyleExtension({ dash: true });
+const COLUMN_MATERIAL = { ambient: 0.55, diffuse: 0.6, shininess: 24, specularColor: [255, 255, 255] };
+const MPV = stations.filter(s => s.kind === 'MPV'), MPS = stations.filter(s => s.kind === 'MPS');
+const PROP_DATA = [{ path: P.path, ts: P.cum }];
+const memoStore = new Map();
+// data arrays keyed by what they depend on, so deck sees the same reference until the inputs change
+function memo(key, fn) { if (!memoStore.has(key)) { if (memoStore.size > 400) memoStore.clear(); memoStore.set(key, fn()); } return memoStore.get(key); }
+function themed(day, night) { return mixRGB(day, night, S.night); }
+function layerStack() {
+  const z = zoom, night = S.night, dark = night > 0.5, L = S.layers, mode = S.mode;
+  const playX = S.speed / 60;
+  const trail = clamp((dark ? 1.1 : 1.5) * playX * 2 ** clamp((13 - z) * 0.75, 0, 2.2), 0.4, 12), head = clamp(0.14 / trail, 0.03, 0.3);
+  const laneW = lerp(1.4, 2.6, smooth(11, 14.5, z));
+  const widthScale = clamp(lerp(0.7, 1.7, (z - 10.5) / 5), 0.6, 1.8) * (S.tier ? 1 : 0.85);
+  const before = FIRST_SYMBOL, out = [];
+  const selLine = S.sel && S.sel.kind === 'line' ? S.sel.i : -1;
+  const stopsOp = smooth(12.3, 13.3, z), mpsOp = smooth(12.9, 13.8, z), bikesOp = smooth(11.6, 12.8, z), mpvOp = smooth(11.6, 12.6, z);
+
+  if (mode === 'understand' || (mode === 'present' && S.heatRise > 0) || S.heatRise > 0.01) {
+    out.push(new ColumnLayer({
+      id: 'heat', beforeId: before, data: D.heat, diskResolution: 4, angle: 45, radius: 30, extruded: true, pickable: true,
+      getPosition: c => [c[0], c[1]], getElevation: c => c[2], elevationScale: 13 * S.heatRise,
+      getFillColor: c => heatColor(c[2]), material: COLUMN_MATERIAL,
+      opacity: 0.92, visible: S.heatRise > 0.01,
+    }));
+  }
+  if (L.lanes2025) out.push(new PathLayer({
+    id: 'lanes2025', beforeId: before, data: D.lanes2025, getPath: d => d.path, getColor: dark ? [180, 200, 255, 170] : [71, 85, 105, 190],
+    widthUnits: 'pixels', getWidth: 2, getDashArray: [3, 3], dashJustified: true, extensions: [DASH],
+    parameters: { depthCompare: 'always' },
+  }));
+  if (L.lanes) {
+    out.push(new PathLayer({
+      id: 'lanes-glow', beforeId: before, data: D.lanes, getPath: d => d.path, getColor: dark ? [52, 227, 168, 60] : [5, 150, 105, 40],
+      widthUnits: 'pixels', getWidth: laneW * 2.6, capRounded: true, jointRounded: true, parameters: dark ? ADD_BLEND : NORMAL_BLEND,
+    }));
+    out.push(new PathLayer({
+      id: 'lanes', beforeId: before, data: D.lanes, getPath: d => d.path,
+      getColor: d => S.mode === 'understand' && S.understand === 'bike' ? sectionColor(d.section, dark) : (dark ? [52, 227, 168, 235] : [4, 140, 98, 235]),
+      updateTriggers: { getColor: [S.mode, S.understand, dark] },
+      widthUnits: 'pixels', getWidth: laneW, capRounded: true, jointRounded: true,
+    }));
+  }
+  if (S.azadliq || S.propReveal > 0) {
+    // drawn in along its length: distance is the timestamp and only currentTime moves, so the data never changes
+    const reveal = { beforeId: before, data: PROP_DATA, getPath: d => d.path, getTimestamps: d => d.ts, currentTime: S.propReveal * P.cum[P.cum.length - 1] + 1e-3,
+      trailLength: 1e9, fadeTrail: false, capRounded: true, jointRounded: true, widthUnits: 'pixels' };
+    out.push(new TripsLayer({ ...reveal, id: 'prop-glow', getColor: dark ? [167, 139, 250, 90] : [124, 58, 237, 60], getWidth: 14 * widthScale, parameters: dark ? ADD_BLEND : NORMAL_BLEND }));
+    out.push(new TripsLayer({ ...reveal, id: 'prop', getColor: dark ? [196, 181, 253, 255] : [109, 40, 217, 255], getWidth: 4 * widthScale }));
+  }
+  if (S.lane) {
+    const c = corridors[S.lane.c];
+    out.push(new PathLayer({ id: 'buslane-' + c.i, beforeId: before, data: memo('lane:' + c.i, () => [c]), getPath: d => d.path, getColor: dark ? [52, 211, 153, 120] : [5, 150, 105, 110],
+      widthUnits: 'meters', getWidth: 34, widthMinPixels: 6, capRounded: true, jointRounded: true, parameters: dark ? ADD_BLEND : NORMAL_BLEND }));
+  }
+  // the network: faint, and what you hover or tap to pick a line
+  out.push(new PathLayer({
+    id: 'network-' + svcVersion, beforeId: before, data: routes, opacity: busFocus(), getPath: r => r.geo ? r.geo.flat : r.flat, positionFormat: 'XY', _pathType: 'open',
+    getColor: dark ? [148, 163, 184, 34] : [30, 41, 59, 30], widthUnits: 'pixels', getWidth: 1.2, pickable: true,
+    updateTriggers: { getPath: svcVersion }, parameters: NORMAL_BLEND,
+    onHover: info => hoverLine(info), onClick: info => info.object && select({ kind: 'line', i: info.object.line }),
+  }));
+  if (L.bikes && bikesOp > 0.01 && S.tier > 0) out.push(new ServiceLayer({
+    id: 'bikes', beforeId: before, data: bikeData, getPath: d => d.flat, positionFormat: 'XY', _pathType: 'open',
+    getColor: dark ? [110, 255, 200, 255] : [4, 150, 105, 255], widthUnits: 'pixels', widthMinPixels: 1.8 * widthScale, widthMaxPixels: 1.8 * widthScale,
+    time: S.t, trail: clamp(0.5 * playX, 0.2, 5), traffic: 1, head: 0.3, night, speedColor: 0, sel: -1,
+    opacity: bikesOp, parameters: dark ? ADD_BLEND : NORMAL_BLEND,
+  }));
+  if (L.buses) {
+    const common = { beforeId: before, data: svcData, getPath: d => d.flat, positionFormat: 'XY', _pathType: 'open',
+      getColor: d => [...lineColor(d.r.L, S.colorMode), 255], updateTriggers: { getColor: [S.colorMode, svcVersion, dark], getTimes: svcVersion, getWidth: svcVersion, getSched: svcVersion, getPath: svcVersion },
+      widthUnits: 'pixels', capRounded: true, time: S.t, traffic: traffic(S.t), night, speedColor: S.colorMode === 'speed' ? 1 : 0, sel: selLine,
+      parameters: dark ? ADD_BLEND : NORMAL_BLEND, opacity: busFocus() };
+    out.push(new ServiceLayer({ ...common, id: 'buses-' + svcVersion, widthMinPixels: 2.8 * widthScale, widthMaxPixels: 2.8 * widthScale, trail, head }));
+    // the bus itself: a short solid head on the same timetable, drawn wider so every bus reads as a dot
+    out.push(new ServiceLayer({ ...common, id: 'bus-heads-' + svcVersion, widthMinPixels: 5.2 * widthScale, widthMaxPixels: 5.2 * widthScale,
+      trail: clamp(0.07 * playX, 0.035, 0.6), head: 1, solid: 1 }));
+  }
+  if (S.closure) {
+    const res = S.closure.res;
+    out.push(new PathLayer({ id: 'detours-' + svcVersion, beforeId: before, data: res.detours, getPath: d => d, getColor: [255, 170, 40, 235],
+      widthUnits: 'pixels', getWidth: 3, getDashArray: [2.5, 1.5], dashJustified: true, extensions: [DASH], capRounded: true }));
+    out.push(new ScatterplotLayer({ id: 'closure', beforeId: before, data: memo(S.closure, () => [S.closure]), getPosition: d => [d.lon, d.lat], getRadius: d => d.r,
+      getFillColor: [239, 68, 68, 50], getLineColor: [239, 68, 68, 230], stroked: true, lineWidthUnits: 'pixels', getLineWidth: 2.5 }));
+    out.push(new ScatterplotLayer({ id: 'skipped-' + svcVersion, beforeId: before, data: memo(res, () => [...res.closedStops, ...res.skipped].map(i => stops[i])), getPosition: s => [s.lon, s.lat],
+      getRadius: 9, radiusMinPixels: 3.5, getFillColor: [239, 68, 68, 255], getLineColor: [255, 255, 255, 255], stroked: true, lineWidthUnits: 'pixels', getLineWidth: 1.5 }));
+  }
+  const hov = S.hoverLine ?? -1;
+  if (hov >= 0 && hov !== selLine) out.push(new PathLayer({ id: 'hover-' + hov + '-' + svcVersion, beforeId: before, data: memo('hl:' + hov + ':' + svcVersion, () => lines[hov].routes.map(i => routes[i])),
+    getPath: r => r.geo ? r.geo.flat : r.flat, positionFormat: 'XY', _pathType: 'open', getColor: [...lineColor(lines[hov], S.colorMode), dark ? 150 : 120],
+    updateTriggers: { getColor: [S.colorMode, dark] }, widthUnits: 'pixels', getWidth: 5, capRounded: true, jointRounded: true, parameters: dark ? ADD_BLEND : NORMAL_BLEND }));
+  if (S.sel && S.sel.kind === 'stop') {
+    const si = S.sel.i;
+    out.push(new PathLayer({ id: 'stop-routes-' + si + '-' + svcVersion, beforeId: before, data: memo('sr:' + si + ':' + svcVersion, () => stopRoutes[si].map(([ri]) => routes[ri])),
+      getPath: r => r.geo ? r.geo.flat : r.flat, positionFormat: 'XY', _pathType: 'open', getColor: r => [...lineColor(r.L, S.colorMode), dark ? 150 : 140],
+      updateTriggers: { getColor: [S.colorMode, dark] }, widthUnits: 'pixels', getWidth: 4, capRounded: true, jointRounded: true, parameters: dark ? ADD_BLEND : NORMAL_BLEND }));
+    out.push(new ScatterplotLayer({ id: 'stop-sel-' + si, beforeId: before, data: memo('ss:' + si, () => [stops[si]]), getPosition: s => [s.lon, s.lat], getRadius: 16, radiusMinPixels: 7,
+      getFillColor: dark ? [255, 255, 255, 255] : [15, 23, 42, 255], getLineColor: dark ? [15, 23, 42, 255] : [255, 255, 255, 255], stroked: true, lineWidthUnits: 'pixels', getLineWidth: 2.5,
+      updateTriggers: { getFillColor: dark, getLineColor: dark } }));
+  }
+  if (selLine >= 0) {
+    const data = memo('sl:' + selLine + ':' + svcVersion, () => lines[selLine].routes.map(i => routes[i]));
+    out.push(new PathLayer({ id: 'sel-glow-' + selLine + '-' + svcVersion, beforeId: before, data, getPath: r => r.geo ? r.geo.flat : r.flat, positionFormat: 'XY', _pathType: 'open',
+      getColor: [...lineColor(lines[selLine], S.colorMode), dark ? 110 : 80], widthUnits: 'pixels', getWidth: 10, capRounded: true, jointRounded: true,
+      parameters: dark ? ADD_BLEND : NORMAL_BLEND, updateTriggers: { getPath: svcVersion } }));
+    out.push(new PathLayer({ id: 'sel-' + selLine + '-' + svcVersion, beforeId: before, data, getPath: r => r.geo ? r.geo.flat : r.flat, positionFormat: 'XY', _pathType: 'open',
+      getColor: dark ? [255, 255, 255, 235] : [15, 23, 42, 220], widthUnits: 'pixels', getWidth: 2.2, capRounded: true, jointRounded: true, updateTriggers: { getPath: svcVersion } }));
+    out.push(new ScatterplotLayer({ id: 'sel-stops-' + selLine, beforeId: before, data: memo('sls:' + selLine, () => [...new Set(data.flatMap(r => r.stops.map(([si]) => si)))].map(i => stops[i])),
+      getPosition: s => [s.lon, s.lat], getRadius: 7, radiusMinPixels: 3, getFillColor: dark ? [11, 18, 32, 255] : [255, 255, 255, 255],
+      getLineColor: [...lineColor(lines[selLine], S.colorMode), 255], stroked: true, lineWidthUnits: 'pixels', getLineWidth: 2 }));
+  }
+  if (mode === 'understand' && S.understand === 'mile') {
+    out.push(new ScatterplotLayer({ id: 'reach', beforeId: before, data: stations, getPosition: s => [s.lon, s.lat], getRadius: STATS.walk,
+      getFillColor: dark ? [52, 227, 168, 26] : [5, 150, 105, 22], parameters: NORMAL_BLEND }));
+  }
+  if ((mode === 'understand' && S.understand === 'mile') || (mode === 'simulate' && S.scn === 'stations')) {
+    out.push(new ScatterplotLayer({ id: 'gaps', beforeId: before, data: gaps, getPosition: s => [s.lon, s.lat], getRadius: STATS.walk,
+      getFillColor: [239, 68, 68, 22], getLineColor: [239, 68, 68, 200], stroked: true, lineWidthUnits: 'pixels', getLineWidth: 1.5, pickable: true,
+      onHover: info => hoverStop(info), onClick: info => info.object && select({ kind: 'stop', i: info.object.i }) }));
+  }
+  if (S.newStations > 0) {
+    const add = memo('ns:' + S.newStations, () => gaps.slice(0, S.newStations));
+    out.push(new ScatterplotLayer({ id: 'new-reach-' + S.newStations, beforeId: before, data: add, getPosition: s => [s.lon, s.lat], getRadius: STATS.walk,
+      getFillColor: dark ? [167, 139, 250, 40] : [124, 58, 237, 30], getLineColor: [124, 58, 237, 200], stroked: true, lineWidthUnits: 'pixels', getLineWidth: 1.5 }));
+    out.push(new ScatterplotLayer({ id: 'new-st-' + S.newStations, beforeId: before, data: add, getPosition: s => [s.lon, s.lat], getRadius: 22, radiusMinPixels: 6,
+      getFillColor: [124, 58, 237, 255], getLineColor: [255, 255, 255, 255], stroked: true, lineWidthUnits: 'pixels', getLineWidth: 2 }));
+  }
+  if (L.stops && stopsOp > 0.01) out.push(new ScatterplotLayer({
+    id: 'stops', beforeId: before, data: served, getPosition: s => [s.lon, s.lat], getRadius: s => 5 + 2.2 * Math.sqrt(s.lines.length),
+    radiusMinPixels: 1.4, radiusMaxPixels: 9, stroked: true, lineWidthUnits: 'pixels', getLineWidth: s => s.hub ? 2 : 1,
+    getFillColor: s => s.hub ? (dark ? [255, 196, 80, 255] : [229, 138, 0, 255]) : (dark ? [15, 22, 38, 255] : [255, 255, 255, 255]),
+    getLineColor: s => s.hub ? (dark ? [15, 22, 38, 255] : [255, 255, 255, 255]) : (dark ? [170, 184, 204, 255] : [100, 116, 139, 255]),
+    updateTriggers: { getFillColor: dark, getLineColor: dark },
+    opacity: stopsOp, pickable: true, onHover: info => hoverStop(info), onClick: info => info.object && select({ kind: 'stop', i: info.object.i }),
+  }));
+  const offNet = mode === 'understand' && S.understand === 'bike';
+  if (L.mpv || offNet || S.azadliq) out.push(new ScatterplotLayer({
+    id: 'mpv', beforeId: before, data: MPV, getPosition: s => [s.lon, s.lat], getRadius: s => offNet && s.lane > STATS.onLane ? 22 : 13, radiusMinPixels: 2.6, radiusMaxPixels: 9,
+    updateTriggers: { getRadius: offNet, getFillColor: [offNet, S.azadliq, dark], getLineColor: dark },
+    opacity: offNet || S.azadliq ? 1 : mpvOp, visible: offNet || S.azadliq || mpvOp > 0.01,
+    getFillColor: s => offNet && s.lane > STATS.onLane ? [255, 72, 0, 255] : S.azadliq && P.stationsOn.includes(s.i) ? [167, 139, 250, 255] : (dark ? [52, 227, 168, 255] : [5, 150, 105, 255]),
+    getLineColor: dark ? [11, 18, 32, 255] : [255, 255, 255, 255], stroked: true, lineWidthUnits: 'pixels', getLineWidth: 1.4,
+    pickable: true,
+    onHover: info => hoverStation(info), onClick: info => info.object && select({ kind: 'station', i: info.object.i }),
+  }));
+  if (L.mps && mpsOp > 0.01) out.push(new ScatterplotLayer({
+    id: 'mps', beforeId: before, data: MPS, getPosition: s => [s.lon, s.lat], getRadius: 6, radiusMinPixels: 1.6, radiusMaxPixels: 5,
+    getFillColor: dark ? [45, 212, 191, 220] : [13, 148, 136, 220], opacity: mpsOp, pickable: true,
+    onHover: info => hoverStation(info), onClick: info => info.object && select({ kind: 'station', i: info.object.i }),
+  }));
+  return out;
+}
+function busFocus() {
+  const bikeStory = (S.mode === 'understand' && S.understand !== 'corridors') || (S.mode === 'simulate' && (S.scn === 'azadliq' || S.scn === 'stations'));
+  return bikeStory ? 0.3 : 1;
+}
+function heatColor(n) {
+  const x = clamp((n - 6) / 30, 0, 1);
+  const st = [[253, 230, 138], [251, 146, 60], [239, 68, 68], [162, 28, 175]];
+  const f = x * 3, i = Math.min(2, Math.floor(f));
+  return [...mixRGB(st[i], st[i + 1], f - i), 235];
+}
+function sectionColor(sec, dark) { return sec === 0 ? (dark ? [52, 227, 168, 240] : [4, 140, 98, 240]) : [249, 115, 22, 240]; }
+function renderDeck() { if (overlay) overlay.setProps({ layers: layerStack() }); }
+
+/* =========================================================================================== tooltips and selection */
+let tipEl = null;
+function tip(info, html) {
+  if (!tipEl) { tipEl = document.createElement('div'); tipEl.className = 'deck-tooltip'; tipEl.style.cssText = 'position:fixed;z-index:30;pointer-events:none;display:none'; document.body.appendChild(tipEl); }
+  if (!html || !info || !info.object || coarse) { tipEl.style.display = 'none'; return; }
+  tipEl.innerHTML = html; tipEl.style.display = 'block';
+  const r = map.getCanvas().getBoundingClientRect();
+  tipEl.style.left = Math.min(innerWidth - 300, r.left + info.x + 14) + 'px'; tipEl.style.top = (r.top + info.y + 14) + 'px';
+}
+function hoverLine(info) {
+  const r = info.object, h = r && !coarse ? r.line : -1;
+  if (h !== (S.hoverLine ?? -1)) { S.hoverLine = h; if (!S.playing) renderDeck(); }
+  tip(info, r && `Line <b>${esc(r.L.n)}</b> · ${esc(r.L.a)} → ${esc(r.L.b)}<br><span class="faint">${esc(r.L.z.en)} · tap for details</span>`);
+  map.getCanvas().style.cursor = r ? 'pointer' : '';
+}
+function hoverStop(info) {
+  const s = info.object;
+  tip(info, s && `<b>${esc(s.name)}</b><br><span class="faint">${s.lines.length} line${s.lines.length === 1 ? '' : 's'} · bike point ${fmt(s.bike)} m away</span>`);
+  map.getCanvas().style.cursor = s ? 'pointer' : '';
+}
+function hoverStation(info) {
+  const s = info.object;
+  tip(info, s && `<b>${esc(s.name)}</b> · ${s.kind === 'MPV' ? 'bike station' : 'bike parking point'}<br><span class="faint">${fmt(s.lane)} m from a bike lane</span>`);
+  map.getCanvas().style.cursor = s ? 'pointer' : '';
+}
+function select(sel) {
+  S.sel = sel;
+  renderDetail();
+  renderDeck();
+}
+
+/* =========================================================================================== DOM: header, tabs, panel */
+const MODES = [
+  ['mirror', 'Mirror', '1'], ['monitor', 'Monitor', '2'], ['understand', 'Understand', '3'], ['simulate', 'Simulate', '4'], ['present', 'Present', '5'],
+];
+const coarse = matchMedia('(pointer: coarse)').matches;
+const phone = () => innerWidth <= 760;
+if (!coarse) document.body.classList.add('fine');
+function buildChrome() {
+  for (const nav of [$('#modes'), $('.sheet-tabs')]) {
+    nav.innerHTML = MODES.map(([id, label, k]) => `<button class="tab" role="tab" data-mode="${id}" aria-selected="false">${label}<kbd>${k}</kbd></button>`).join('');
+    nav.addEventListener('click', e => { const b = e.target.closest('[data-mode]'); if (b) { userInput(); setMode(b.dataset.mode); } });
+  }
+  $('.speeds').innerHTML = [[1, '1×'], [60, '60×'], [600, '600×']].map(([v, l]) => `<button data-speed="${v}" aria-pressed="false" title="${v === 1 ? 'Real time' : v + ' times real time'}">${l}</button>`).join('');
+  $('.speeds').addEventListener('click', e => { const b = e.target.closest('[data-speed]'); if (b) { userInput(); S.speed = +b.dataset.speed; S.playing = true; syncClock(); } });
+  $('#btnDay').innerHTML = ICON.day; $('#btnPresent').innerHTML = ICON.present; $('#btnFull').innerHTML = ICON.full; $('#btnTheme').innerHTML = ICON.theme;
+  $('#play').addEventListener('click', () => { userInput(); S.playing = !S.playing; syncClock(); });
+  $('#btnDay').addEventListener('click', () => playDay());
+  $('#btnPresent').addEventListener('click', () => present());
+  $('#btnFull').addEventListener('click', () => toggleFull());
+  $('#btnTheme').addEventListener('click', () => {
+    S.themePref = { auto: 'light', light: 'dark', dark: 'auto' }[S.themePref];
+    applyNight(S.night); toast({ auto: 'Theme follows the sun', light: 'Light theme', dark: 'Dark theme' }[S.themePref]);
+  });
+  $('#exitBtn').addEventListener('click', () => exitAll());
+  $('#titleFacts').innerHTML = [
+    [fmt(STATS.linesMapped), 'bus lines'], [fmt(STATS.stopsServed), 'stops'], [fmt(STATS.lanesKm, 0) + ' km', 'bike lanes'], [fmt(STATS.mpv + STATS.mps), 'bike points'],
+  ].map(([v, l]) => `<div><b>${v}</b>${l}</div>`).join('');
+  sheetSetup();
+}
+function syncClock() {
+  $('#play').innerHTML = S.playing ? ICON.pause : ICON.play;
+  $('#play').setAttribute('aria-label', S.playing ? 'Pause the clock' : 'Run the clock');
+  document.querySelectorAll('.speeds button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.speed === S.speed && S.playing)));
+}
+function setMode(m) {
+  if (!MODES.some(x => x[0] === m)) return;
+  const prev = S.mode;
+  S.mode = m;
+  document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.mode === m)));
+  if (m === 'understand' && prev !== 'understand') { riseHeat(S.understand === 'corridors' ? 1 : 0); if (!tour && S.understand === 'corridors') fitCorridors(); }
+  if (m !== 'understand' && S.heatRise > 0 && !tour) riseHeat(0);
+  renderPanel();
+  renderDeck();
+  labels();
+}
+let heatAnim = null;
+S.heatRise = 0;
+function riseHeat(to) {
+  cancelAnimationFrame(heatAnim);
+  const from = S.heatRise, t0 = performance.now(), dur = 1100;
+  const step = now => { const x = clamp((now - t0) / dur, 0, 1); S.heatRise = lerp(from, to, 1 - (1 - x) ** 3); renderDeck(); if (x < 1) heatAnim = requestAnimationFrame(step); };
+  heatAnim = requestAnimationFrame(step);
+}
+function revealProposal(on) {
+  S.azadliq = on;
+  const from = S.propReveal, to = on ? 1 : 0, t0 = performance.now(), dur = 1600;
+  const step = now => { const x = clamp((now - t0) / dur, 0, 1); S.propReveal = lerp(from, to, 1 - (1 - x) ** 2); renderDeck(); if (x < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+
+function head(eyebrow, title, lede) {
+  $('#panel .head').innerHTML = `<div class="eyebrow">${eyebrow}</div><h2>${title}</h2>${lede ? `<p class="lede">${lede}</p>` : ''}`;
+}
+function kpi(v, unit, label, tag, wide, id) {
+  return `<div class="kpi${wide ? ' wide' : ''}"><div class="v num"${id ? ` id="${id}"` : ''}>${v}${unit ? `<small>${unit}</small>` : ''}</div><div class="l">${label}</div>${tag ? `<div class="t">${tag}</div>` : ''}</div>`;
+}
+function renderPanel() {
+  const body = $('#panel .body');
+  const m = S.mode;
+  if (m === 'mirror') {
+    head('Mirror', 'The city\'s bus and bike network, running', `Every line's buses on their real streets, through a simulated day. <a class="link" data-act="assume">Assumptions</a>`);
+    body.innerHTML = `
+      <div class="kpis">${kpi('—', '', 'buses on the road', 'simulated', 0, 'kFleet')}${kpi(fmt(STATS.linesMapped), '', 'bus lines mapped', 'from data')}
+      ${kpi(fmt(STATS.stopsServed), '', 'stops served', 'from data')}${kpi(fmt(STATS.lanesKm, 1), 'km', 'bike lanes', 'from data')}</div>
+      <div class="sec"><h3>Colour buses by</h3><div class="seg" data-group="color">
+        ${[['type', 'Service type'], ['line', 'Line'], ['speed', 'Speed']].map(([v, l]) => `<button data-v="${v}" aria-pressed="${S.colorMode === v}">${l}</button>`).join('')}</div></div>
+      <div class="sec"><h3>Legend</h3><div class="legend" id="legend"></div></div>
+      <div class="sec"><h3>Layers</h3><div class="chips" data-group="layers">
+        ${[['buses', 'Buses'], ['stops', 'Stops'], ['lanes', 'Bike lanes'], ['lanes2025', 'Lanes, Jan 2025'], ['mpv', 'Bike stations'], ['mps', 'Parking points'], ['bikes', 'Bike flow'], ['buildings', '3D buildings']]
+          .map(([k, l]) => `<button class="chip" data-k="${k}" aria-pressed="${S.layers[k]}">${l}</button>`).join('')}</div></div>
+      <div class="note"><b>What is measured, what is simulated.</b> Routes, stops, run times, lanes and stations come from the city's data:
+        ${fmt(STATS.linesMapped)} of ${fmt(STATS.lines)} lines have route geometry (no geometry for ${STATS.noGeometry.length}: ${esc(STATS.noGeometry.join(', '))}).
+        The timetable is simulated from each line's run time and assumed headways; bike flow is illustrative. There is no ridership in the data, so the twin shows none.</div>`;
+    legend();
+  } else if (m === 'monitor') {
+    head('Monitor', 'The network at this moment', 'What the simulated timetable puts on the street right now, and what needs attention.');
+    body.innerHTML = `
+      <div class="kpis">${kpi('—', '', 'buses on the road', 'simulated', 0, 'mFleet')}${kpi('—', '', 'lines running', 'simulated', 0, 'mLines')}
+      ${kpi('—', 'km/h', 'average bus speed', 'assumed traffic', 0, 'mSpeed')}${kpi('—', 'min', 'scheduled headway', 'assumed', 0, 'mHead')}
+      ${kpi('—', '/h', 'buses at the busiest stop', 'simulated', 1, 'mStop')}</div>
+      <div class="sec"><h3>Alerts <span class="faint" id="alertN"></span></h3><div id="alerts"></div></div>
+      <div class="sec"><button class="btn block" data-act="inject">Inject an incident on the busiest corridor</button></div>
+      <div class="note">Alerts are rules on the simulated timetable: a stop above <b>${A.stopCap} buses an hour</b>, or lines that reach a corridor less than <b>${A.platoon} s</b> apart, where buses run in platoons. Both thresholds are assumptions.</div>`;
+    updateLive(true);
+  } else if (m === 'understand') {
+    head('Understand', 'Where the network is strained or disconnected', 'Three views the data answers directly.');
+    body.innerHTML = `
+      <div class="seg" data-group="understand">${[['corridors', 'Bus corridors'], ['mile', 'Last mile'], ['bike', 'Bike network']]
+        .map(([v, l]) => `<button data-v="${v}" aria-pressed="${S.understand === v}">${l}</button>`).join('')}</div>
+      <div id="uBody"></div>`;
+    renderUnderstand();
+  } else if (m === 'simulate') {
+    head('Simulate and decide', 'Test a decision before the city pays for it', 'Each option shows before and after, and the assumption it rests on.');
+    body.innerHTML = `<div id="scns"></div>`;
+    renderScenarios();
+  } else if (m === 'present') {
+    const lr = laneResult(0, A.laneGain);
+    head('Present', 'The value of the twin in 48 seconds', 'A guided story for a boardroom screen: every figure computed live from the model.');
+    body.innerHTML = `
+      <div class="btns"><button class="btn primary block" data-act="present">${ICON.present} Start the story <span class="faint">P</span></button></div>
+      <div class="btns" style="margin-top:8px"><button class="btn" style="flex:1" data-act="day">${ICON.day} Play the day <span class="faint">D</span></button>
+        <button class="btn" style="flex:1" data-act="full">${ICON.full} Full screen <span class="faint">F</span></button></div>
+      <div class="sec"><h3>The story's figures</h3><div class="list">
+        ${storyRow('Mirror', `${fmt(STATS.linesMapped)} lines on their real streets, ${fmt(STATS.stopsServed)} stops`)}
+        ${storyRow('Monitor', `${fmt(Math.max(...series()))} buses on the road at the peak (simulated)`)}
+        ${storyRow('Understand', `${corridors[0].peak} lines share one stretch of ${esc(corridors[0].name)}`)}
+        ${storyRow('Decide', `a bus lane there saves ${fmt(lr.busHours)} bus-hours a day${lr.freed > 0 ? ` and frees ${lr.freed} buses at peak` : ''}`)}
+        ${storyRow('Connect', `${kmStr(P.m)} of lane on Azadlıq prospekti puts ${P.stationsOn.length} stations on the network`)}
+      </div></div>
+      <div class="note">Present mode hides the controls, flies a scripted camera and captions each step. Any tap or key hands control back.</div>`;
+  }
+}
+function storyRow(k, t) { return `<div class="row"><div class="main"><b>${k}</b><span>${t}</span></div></div>`; }
+function legend() {
+  const el = $('#legend'); if (!el) return;
+  if (S.colorMode === 'speed') el.innerHTML = [['#f04545', 'under 10 km/h'], ['#f9bd28', 'about 16 km/h'], ['#29dc8f', '23 km/h and over']].map(([c, l]) => `<span><i style="background:${c}"></i>${l}</span>`).join('') + `<span><i style="background:#22e68c"></i>in a bus lane</span>`;
+  else if (S.colorMode === 'line') el.innerHTML = `<span style="grid-column:span 2"><i style="background:linear-gradient(90deg,#ffb020,#38bdf8,#a78bfa,#34d399,#f472b6)"></i>one colour per line</span>`;
+  else el.innerHTML = [1, 3, 2, 4, 5, 6].map(z => `<span><i style="background:rgb(${S.night > 0.5 ? ZONES[z].rgb : ZONES[z].day})"></i>${ZONES[z].en} <span class="faint">${lines.filter(l => l.zoneId === z && l.routes.length).length}</span></span>`).join('');
+  el.innerHTML += `<span><i style="background:var(--bike)"></i>bike lane</span><span><i style="background:var(--bike);height:9px;width:9px;border-radius:50%"></i>bike station</span>`;
+}
+function renderUnderstand() {
+  const el = $('#uBody'); if (!el) return;
+  const u = S.understand;
+  if (u === 'corridors') {
+    el.innerHTML = `<div class="sec"><h3>Bus-priority candidates</h3>
+      <p class="small muted" style="margin:0 0 10px">Where the most lines share one street. Columns show how many distinct lines cross each 80 m of street; the peak is <b>${STATS.peakCell}</b>.</p>
+      <div class="list">${corridors.map((c, i) => `<button class="row" data-corr="${i}"><div class="rk">${i + 1}</div><div class="main"><b>${esc(c.name)}</b><span>${c.near ? 'near ' + esc(c.near) + ' · ' : ''}${kmStr(c.m)}</span></div><div class="val num">${c.peak}<small>lines</small></div></button>`).join('')}</div></div>
+      <div class="note">Each of these stretches carries ${Math.min(...corridors.map(c => c.peak))}–${Math.max(...corridors.map(c => c.peak))} lines. That is where a bus lane helps the most buses at once. Test one in <a class="link" data-act="go-lane">Simulate</a>.</div>`;
+  } else if (u === 'mile') {
+    const pc = 100 * STATS.stopsBike / STATS.stopsServed, cpc = 100 * STATS.centralStopsBike / STATS.centralStops;
+    el.innerHTML = `<div class="sec"><div class="kpis">${kpi(fmt(pc, 0), '%', `of ${fmt(STATS.stopsServed)} stops have a bike point within ${STATS.walk} m`, 'from data')}
+      ${kpi(fmt(cpc, 0), '%', 'the same in central Baku', 'from data')}</div></div>
+      <div class="sec"><h3>First and last mile: busy stops with no bike point <span class="faint">${gaps.length}</span></h3>
+      <div class="list">${gaps.slice(0, 8).map((s, i) => `<button class="row" data-stop="${s.i}"><div class="rk">${i + 1}</div><div class="main"><b>${esc(s.name)}</b><span>nearest bike point ${kmStr(s.bike)}</span></div><div class="val num">${s.lines.length}<small>lines</small></div></button>`).join('')}</div></div>
+      <div class="note">Red circles are the ${STATS.walk} m reach of stops served by 10 or more lines with no bike station or parking point inside it; green shows the reach of the ${fmt(STATS.mpv + STATS.mps)} bike points. Fill them in <a class="link" data-act="go-stations">Simulate</a>.</div>`;
+  } else {
+    el.innerHTML = `<div class="sec"><div class="kpis">${kpi(fmt(STATS.lanesKm, 1), 'km', 'bike lanes now', 'from data')}${kpi(fmt(STATS.lanesKm - STATS.lanes2025Km, 1), 'km', 'more than the January 2025 layer', 'from data')}
+      ${kpi(fmt(STATS.mpvOnLane), '', `of ${STATS.mpv} bike stations sit on a lane`, `within ${STATS.onLane} m`)}${kpi(fmt(STATS.mpvOffLane), '', 'bike stations off the lanes', 'orange on the map')}</div></div>
+      <div class="sec"><h3>The biggest gap</h3><div class="note" style="margin-top:0">${P.cluster} of the stations off the lanes sit north of where the <b>Vaqif pr.</b> lane ends, along <b>Azadlıq prospekti</b>.
+        The lanes form ${STATS.sections} connected section${STATS.sections === 1 ? '' : 's'}; the largest runs ${fmt(STATS.largestSectionKm, 1)} km.
+        <a class="link" data-act="go-azadliq">Extend the lane up Azadlıq prospekti</a>.</div></div>`;
+  }
+  renderDeck();
+  labels();
+}
+
+/* ---------- scenarios panel ---------- */
+const SCN = [
+  ['lane', 'Bus lane on a corridor', 'Minutes saved and buses freed'],
+  ['headway', 'Change the headway', 'Waiting time against fleet'],
+  ['incident', 'Close a street', 'Lines, stops and the detour'],
+  ['azadliq', 'Bike lane on Azadlıq prospekti', 'Stations and stops it connects'],
+  ['stations', 'Bike stations at busy stops', 'First and last mile coverage'],
+];
+function renderScenarios() {
+  const el = $('#scns'); if (!el) return;
+  el.innerHTML = SCN.map(([id, t, s], i) => `<div class="scn${S.scn === id ? ' open' : ''}" data-scn="${id}">
+    <button class="sh" aria-expanded="${S.scn === id}"><div class="n">${i + 1}</div><div><b>${t}</b><span>${s}</span></div>${scnActive(id) ? '<div class="st">On</div>' : ''}</button>
+    ${S.scn === id ? `<div class="sb">${scnBody(id)}</div>` : ''}</div>`).join('');
+}
+function scnActive(id) {
+  return { lane: !!S.lane, headway: S.headMul !== 1 || S.lineHead.size > 0, incident: !!S.closure, azadliq: S.azadliq, stations: S.newStations > 0 }[id];
+}
+function ba(label, before, after, unit, better, digits = 0) {
+  const d = after - before, good = better === 'lower' ? d < 0 : d > 0;
+  const cls = Math.abs(d) < 1e-9 ? 'neutral' : good ? 'good' : 'bad';
+  const sign = d > 0 ? '+' : d < 0 ? '−' : '±';
+  return `<div class="ba"><div class="k">${label}</div><div class="x num"><s>${fmt(before, digits)}</s><span data-tween="${after}" data-d="${digits}">${fmt(after, digits)}</span>${unit ? ` <small class="faint">${unit}</small>` : ''}</div>
+    <div class="d ${cls} num">${sign}${fmt(Math.abs(d), digits)}${unit ? ' ' + unit : ''}</div></div>`;
+}
+function scnBody(id) {
+  if (id === 'lane') {
+    const ci = S.lane ? S.lane.c : (S.laneDraft ?? 0), gain = S.lane ? S.lane.gain : A.laneGain;
+    const r = laneResult(ci, gain);
+    return `<div class="chips" data-group="corr">${corridors.map((c, i) => `<button class="chip" data-v="${i}" aria-pressed="${i === ci}">${esc(c.name)} <span class="faint">${c.peak}</span></button>`).join('')}</div>
+      <label class="sl">Bus speed gained in the lane <output>${Math.round(gain * 100)}%</output></label>
+      <input type="range" min="5" max="40" step="1" value="${Math.round(gain * 100)}" data-in="gain" aria-label="Bus speed gained in the lane">
+      <div class="btns" style="margin:8px 0 4px"><button class="btn ${S.lane ? '' : 'primary'} block" data-act="lane">${S.lane ? 'Remove the bus lane' : 'Apply the bus lane'}</button></div>
+      ${ba(`Peak run along ${esc(corridors[ci].name)} (${kmStr(r.m)})`, r.tripBefore, S.lane ? r.tripAfter : r.tripBefore, 'min', 'lower', 1)}
+      ${ba('Bus-hours saved a day', 0, S.lane ? r.busHours : 0, 'h', 'higher')}
+      ${ba('Buses freed at the peak', 0, S.lane ? r.freed : 0, '', 'higher')}
+      ${ba('Lines that use the lane', 0, S.lane ? r.lines : 0, '', 'higher')}
+      <div class="rests">⚑ <span>Rests on <b>+${Math.round(gain * 100)}% bus speed inside the lane</b>, the assumed traffic profile and a ${Math.round(A.layover * 100)}% layover.</span></div>`;
+  }
+  if (id === 'headway') {
+    const sel = S.sel && S.sel.kind === 'line' ? lines[S.sel.i] : null;
+    const scope = S.hwScope === 'line' && sel ? 'line' : 'network';
+    const now = snapshot(S.t);
+    const base = baseline();
+    let waitB, waitA, fleetB, fleetA, ctl;
+    if (scope === 'line') {
+      const ov = S.lineHead.get(sel.i) || sel.z.hp;
+      waitB = sel.z.hp / 2; waitA = ov / 2; fleetB = base.lineFleet[sel.i]; fleetA = lineFleet(sel.i);
+      ctl = `<label class="sl">Line ${esc(sel.n)}: peak headway <output>${fmt(ov, 0)} min</output></label>
+        <input type="range" min="3" max="40" step="1" value="${ov}" data-in="linehead" aria-label="Peak headway for line ${esc(sel.n)}">`;
+    } else {
+      waitB = base.wait; waitA = avgWait(); fleetB = base.fleet; fleetA = fleetNeeded();
+      ctl = `<label class="sl">Every headway, scaled <output>×${S.headMul.toFixed(2)}</output></label>
+        <input type="range" min="0.5" max="2" step="0.05" value="${S.headMul}" data-in="headmul" aria-label="Scale every headway">`;
+    }
+    return `<div class="seg" data-group="hwscope"><button data-v="network" aria-pressed="${scope === 'network'}">Whole network</button>
+        <button data-v="line" aria-pressed="${scope === 'line'}" ${sel ? '' : 'title="Pick a line on the map first"'}>${sel ? 'Line ' + esc(sel.n) : 'A line (pick one)'}</button></div>
+      ${ctl}
+      ${ba('Average wait at the peak', waitB, waitA, 'min', 'lower', 1)}
+      ${ba('Fleet needed at the peak', fleetB, fleetA, 'buses', 'lower')}
+      ${ba(`Buses on the road at ${hhmm(S.t)}`, base.nowFleet, now.fleet, '', 'neutral')}
+      <div class="btns" style="margin-top:8px"><button class="btn block" data-act="hw-reset">Back to the assumed headways</button></div>
+      <div class="rests">⚑ <span>Rests on <b>passengers arriving at random</b> (the wait is half the headway) and a ${Math.round(A.layover * 100)}% layover.</span></div>`;
+  }
+  if (id === 'incident') {
+    const res = S.closure && S.closure.res;
+    const perHour = res ? res.routes.reduce((a, x) => a + (S.t >= x.r.S && S.t <= x.r.E ? 60 / headwayAt(x.r, S.t) : 0), 0) : 0;
+    return `<div class="chips" data-group="closeat">${corridors.map((c, i) => `<button class="chip" data-v="${i}" aria-pressed="${!!(S.closure && S.closure.c === i)}" title="${esc(c.closeAt.name)}">${esc(c.name)}</button>`).join('')}
+      <button class="chip" data-v="tap" aria-pressed="${S.closeMode}">${S.closeMode ? 'Tap the map…' : 'Tap anywhere'}</button></div>
+      <label class="sl">Closed radius <output>${S.closeR || 150} m</output></label>
+      <input type="range" min="60" max="400" step="10" value="${S.closeR || 150}" data-in="closer" aria-label="Closed radius">
+      ${res ? `${S.closure.name ? `<p class="small muted" style="margin:8px 0 0">Closed at <b>${esc(S.closure.name)}</b>.</p>` : ''}
+        ${ba('Lines through the closure', 0, res.lines.size, '', 'lower')}
+        ${ba('Rerouted around it', 0, res.detLines.size, 'lines', 'lower')}
+        ${ba('Turn short, no practical detour', 0, res.cutLines.size, 'lines', 'lower')}
+        ${ba('Extra time per trip, average', 0, res.avgExtra, 'min', 'lower', 1)}
+        ${ba('Extra time per trip, worst line', 0, res.maxExtra, 'min', 'lower', 1)}
+        ${ba('Stops out of service', 0, res.closedStops.length + res.skipped.size, '', 'lower')}
+        ${ba(`Trips through it an hour at ${hhmm(S.t)}`, 0, perHour, '', 'lower')}
+        <div class="btns" style="margin-top:8px"><button class="btn block" data-act="reopen">Reopen the street</button></div>` :
+        `<p class="small muted">Pick a corridor or tap the map: the twin closes the street at that point, reroutes every line through it on streets other lines already use, and counts what is lost.</p>`}
+      <div class="rests">⚑ <span>Rests on <b>detours along streets buses already use</b>, at each line's speed. A line turns short when its terminus is inside the closure or the only way round is over three times longer. One-way rules are not in the data.</span></div>`;
+  }
+  if (id === 'azadliq') {
+    const on = S.azadliq;
+    return `<p class="small muted" style="margin:0 0 8px">${kmStr(P.m)} of lane up Azadlıq prospekti, from the end of the Vaqif pr. lane (${P.link} m away) to Azadlıq metro, on the line the buses already run (line ${esc(P.via)}).</p>
+      <div class="btns" style="margin:4px 0"><button class="btn ${on ? '' : 'primary'} block" data-act="azadliq">${on ? 'Hide the lane' : 'Draw the lane'}</button></div>
+      ${ba('Bike lanes', STATS.lanesKm, STATS.lanesKm + (on ? P.m / 1000 : 0), 'km', 'higher', 1)}
+      ${ba(`Bike stations on a lane (≤${STATS.onLane} m)`, STATS.mpvOnLane, STATS.mpvOnLane + (on ? P.stationsOn.length : 0), '', 'higher')}
+      ${ba(`Bus stops within ${STATS.walk} m of a lane`, STATS.stopsLane, STATS.stopsLane + (on ? P.stopsNew.length : 0), '', 'higher')}
+      ${ba('Bus lines that reach a bike lane, newly', 0, on ? P.linesNew.length : 0, '', 'higher')}
+      <div class="rests">⚑ <span>Rests on <b>the street's alignment from the bus route</b>; ${P.stations300.length} bike points lie within ${STATS.walk} m of it.</span></div>`;
+  }
+  if (id === 'stations') {
+    const r = stationsResult(S.newStations);
+    return `<label class="sl">New stations, at the busiest stops without one <output>${S.newStations}</output></label>
+      <input type="range" min="0" max="${gaps.length}" step="1" value="${S.newStations}" data-in="newst" aria-label="Number of new bike stations">
+      ${ba(`Stops with a bike point within ${STATS.walk} m`, r.before, r.covered, '', 'higher')}
+      ${ba('Busy stops (10+ lines) still without', r.busyBefore, r.busyLeft, '', 'lower')}
+      ${ba('Share of stops covered', 100 * r.before / STATS.stopsServed, 100 * r.covered / STATS.stopsServed, '%', 'higher', 1)}
+      <div class="rests">⚑ <span>Rests on <b>a station at the stop itself</b> and a ${STATS.walk} m walk.</span></div>`;
+  }
+  return '';
+}
+let BASE = null;
+function baseline() {
+  if (!BASE) {
+    const save = { headMul: S.headMul, lineHead: new Map(S.lineHead) };
+    S.headMul = 1; S.lineHead.clear(); routes.forEach(plan); routes.forEach(buildService);
+    BASE = { fleet: fleetNeeded(), wait: avgWait(), lineFleet: lines.map(l => lineFleet(l.i)) };
+    S.headMul = save.headMul; S.lineHead = save.lineHead; routes.forEach(plan); routes.forEach(buildService);
+  }
+  BASE.nowFleet = baseNow();
+  return BASE;
+}
+function baseNow() {
+  // buses on the road now under the assumed headways, without rebuilding the service
+  let n = 0; const f = traffic(S.t);
+  for (const r of routes) {
+    const z = r.L.z, hp = z.hp, ho = z.ho, s0 = z.s + ((r.phase + (r.dir === 2 ? 0.5 : 0)) % 1) * hp, R = r.run / f;
+    for (const tt of S.t < 300 ? [S.t, S.t + 1440] : [S.t]) { const hi = Math.min(tt, z.e), lo = Math.max(s0, tt - R); if (hi > lo) n += ndep(hi, s0, hp, ho) - ndep(lo, s0, hp, ho); }
+  }
+  return Math.round(n);
+}
+function avgWait() { const rs = lines.filter(l => l.routes.length); return rs.reduce((a, l) => a + routes[l.routes[0]].hp / 2, 0) / rs.length; }
+
+/* ---------- panel events ---------- */
+function panelEvents() {
+  const panel = $('#panel');
+  panel.addEventListener('click', e => {
+    const t = e.target.closest('button, a');
+    if (!t) return;
+    userInput();
+    const g = t.closest('[data-group]');
+    if (g && t.dataset.v !== undefined) return groupClick(g.dataset.group, t.dataset.v, t);
+    if (g && g.dataset.group === 'layers' && t.dataset.k) {
+      S.layers[t.dataset.k] = !S.layers[t.dataset.k]; t.setAttribute('aria-pressed', S.layers[t.dataset.k]);
+      if (t.dataset.k === 'buildings') map.setLayoutProperty('building-3d', 'visibility', S.layers.buildings && S.tier > 0 ? 'visible' : 'none'), applySun(true);
+      renderDeck(); return;
+    }
+    if (t.closest('.scn') && t.classList.contains('sh')) { const id = t.closest('.scn').dataset.scn; S.scn = S.scn === id ? null : id; if (S.scn === 'stations' || S.scn === 'incident') {} renderScenarios(); renderDeck(); labels(); return; }
+    if (t.dataset.corr !== undefined) { const c = corridors[+t.dataset.corr]; flyToPath(c.path, { pitch: 55 }); return; }
+    if (t.dataset.stop !== undefined) { const s = stops[+t.dataset.stop]; select({ kind: 'stop', i: s.i }); map.flyTo({ center: [s.lon, s.lat], zoom: 15, pitch: 50, duration: 1600 }); return; }
+    const act = t.dataset.act;
+    if (act) action(act);
+  });
+  panel.addEventListener('input', e => {
+    const k = e.target.dataset.in; if (!k) return;
+    const v = +e.target.value;
+    const out = e.target.previousElementSibling && e.target.previousElementSibling.querySelector('output');
+    if (k === 'gain') { if (out) out.textContent = v + '%'; if (S.lane) { S.lane.gain = v / 100; rebuildAll(); } else A.laneGainDraft = v; deferScn(); }
+    if (k === 'headmul') { S.headMul = v; if (out) out.textContent = '×' + v.toFixed(2); rebuildAll(); deferScn(); }
+    if (k === 'linehead') { const li = S.sel.i; S.lineHead.set(li, v); if (out) out.textContent = v + ' min'; rebuildAll(); deferScn(); }
+    if (k === 'closer') { S.closeR = v; if (out) out.textContent = v + ' m'; if (S.closure) deferClose(); }
+    if (k === 'newst') { S.newStations = v; if (out) out.textContent = v; deferScn(); }
+    renderDeck();
+  });
+}
+let scnTimer = 0, closeTimer = 0;
+function deferScn() { clearTimeout(scnTimer); scnTimer = setTimeout(() => { const ae = document.activeElement, k = ae && ae.dataset && ae.dataset.in; renderScenarios(); if (k) { const el = document.querySelector(`[data-in="${k}"]`); if (el) el.focus(); } labels(); }, 140); }
+function deferClose() { clearTimeout(closeTimer); closeTimer = setTimeout(() => { closeStreet(S.closure.lon, S.closure.lat, S.closure.c); }, 220); }
+function groupClick(group, v, el) {
+  if (group === 'color') { S.colorMode = v; el.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v)); legend(); renderDeck(); }
+  if (group === 'understand') { S.understand = v; el.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v)); riseHeat(v === 'corridors' ? 1 : 0); renderUnderstand(); if (v === 'corridors') fitCorridors(); if (v === 'mile') flyOverview(12.1); if (v === 'bike') map.flyTo({ center: [49.845, 40.392], zoom: 12.6, pitch: 45, bearing: -10, duration: 1800 }); }
+  if (group === 'corr') { const i = +v; S.laneDraft = i; if (S.lane) { S.lane.c = i; rebuildAll(); } renderScenarios(); flyToPath(corridors[i].path, { pitch: 58 }); renderDeck(); labels(); }
+  if (group === 'hwscope') { if (v === 'line' && !(S.sel && S.sel.kind === 'line')) { toast('Pick a line on the map first — tap any route'); return; } S.hwScope = v; renderScenarios(); }
+  if (group === 'closeat') {
+    if (v === 'tap') { S.closeMode = !S.closeMode; renderScenarios(); if (S.closeMode) toast('Tap a street on the map to close it'); return; }
+    const c = corridors[+v]; closeStreet(c.closeAt.lon, c.closeAt.lat, +v, c.closeAt.name); flyTo([c.closeAt.lon, c.closeAt.lat], 14.4, 50);
+  }
+}
+function action(act) {
+  if (act === 'assume') return assumptions();
+  if (act === 'inject') { setMode('simulate'); S.scn = 'incident'; const i = storyClosure(), c = corridors[i]; closeStreet(c.closeAt.lon, c.closeAt.lat, i, c.closeAt.name); flyTo([c.closeAt.lon, c.closeAt.lat], 14.4, 52); return; }
+  if (act === 'present') return present();
+  if (act === 'day') return playDay();
+  if (act === 'full') return toggleFull();
+  if (act === 'go-lane') { setMode('simulate'); S.scn = 'lane'; renderScenarios(); return; }
+  if (act === 'go-stations') { setMode('simulate'); S.scn = 'stations'; if (!S.newStations) S.newStations = 10; renderScenarios(); renderDeck(); return; }
+  if (act === 'go-azadliq') { setMode('simulate'); S.scn = 'azadliq'; if (!S.azadliq) revealProposal(true); renderScenarios(); flyToPath(P.path, { pitch: 50 }); return; }
+  if (act === 'lane') { if (S.lane) S.lane = null; else S.lane = { c: S.laneDraft ?? 0, gain: (A.laneGainDraft ?? A.laneGain * 100) / 100 }; rebuildAll(); renderScenarios(); renderDeck(); labels(); if (S.lane) flyToPath(corridors[S.lane.c].path, { pitch: 58 }); return; }
+  if (act === 'hw-reset') { S.headMul = 1; S.lineHead.clear(); rebuildAll(); renderScenarios(); renderDeck(); return; }
+  if (act === 'reopen') { S.closure = null; applyClosure(null); renderScenarios(); renderDeck(); labels(); return; }
+  if (act === 'azadliq') { revealProposal(!S.azadliq); renderScenarios(); labels(); if (S.azadliq) flyToPath(P.path, { pitch: 50 }); return; }
+}
+let storyIdx = null;
+function storyClosure() {
+  if (storyIdx == null) {
+    let best = -1, bi = 0;
+    corridors.forEach((c, i) => { const r = c.closure || (c.closure = closeAt(c.closeAt.lon, c.closeAt.lat, 150)); const score = r.detLines.size - r.cutLines.size; if (score > best) { best = score; bi = i; } });
+    storyIdx = bi;
+  }
+  return storyIdx;
+}
+function closeStreet(lon, lat, ci, name) {
+  const r = S.closeR || 150;
+  if (!G) toast('Building the street graph from every route…');
+  setTimeout(() => {
+    const res = closeAt(lon, lat, r);
+    if (name == null) { let best = null; for (const s of served) { const d = hav(lon, lat, s.lon, s.lat); if (d < r && (!best || s.lines.length > best.lines.length)) best = s; } name = best ? best.name : ''; }
+    S.closure = { lon, lat, r, res, c: ci, name };
+    applyClosure(res);
+    S.closeMode = false;
+    renderScenarios(); renderDeck(); labels();
+    if (S.mode === 'monitor') updateLive(true);
+  }, G ? 0 : 30);
+}
+function assumptions() {
+  const rows = [
+    ['Run time', 'from the data, per line; both directions take it', 'data'],
+    ['Peak hours', '07:00–09:30 and 17:00–19:30', 'assumed'],
+    ...[1, 2, 3, 4, 5, 6, 7].map(z => [`Headway, ${ZONES[z].en.toLowerCase()}`, `${ZONES[z].hp} min peak, ${ZONES[z].ho} min off-peak, ${hhmm(ZONES[z].s)}–${hhmm(ZONES[z].e)}`, 'assumed']),
+    ['Traffic', `speeds fall to ${Math.round(traffic(495) * 100)}% of the data's at 08:15 and ${Math.round(traffic(1095) * 100)}% at 18:15; ${Math.round(traffic(180) * 100)}% at night`, 'assumed'],
+    ['Layover', `${Math.round(A.layover * 100)}% of a round trip`, 'assumed'],
+    ['Waiting time', 'half the headway (passengers arrive at random)', 'assumed'],
+    ['Stop capacity', `${A.stopCap} buses an hour`, 'assumed'],
+    ['Bus lane', `+${Math.round(A.laneGain * 100)}% bus speed inside it, adjustable`, 'assumed'],
+    ['Bike flow', `illustrative movement at ${A.bikeKmh} km/h; no counts in the data`, 'illustrative'],
+    ['Walking reach', `${STATS.walk} m from a stop to a bike point; a station within ${STATS.onLane} m of a lane is on it`, 'assumed'],
+    ['Data check', `the register's line lengths are the round trip of the mapped routes (median ratio ${STATS.registerRatio}); its run times imply ${STATS.impliedKmh} km/h on every line, a planning figure, not a measurement`, 'data'],
+  ];
+  S.sel = { kind: 'assume' };
+  const el = $('#detail');
+  el.classList.remove('hidden');
+  el.innerHTML = `<button class="iconbtn x" data-close aria-label="Close">${ICON.close}</button><div class="kind">How the twin works</div><h3>Assumptions</h3>
+    <div class="sub">The data gives the network. Everything below is what the twin adds to make it run, and every figure on screen that depends on it is marked.</div>
+    <div class="list" style="margin-top:10px">${rows.map(([k, v, t]) => `<div class="row" style="align-items:flex-start"><div class="main"><b>${k}</b><span style="white-space:normal">${v}</span></div><div class="val"><small>${t}</small></div></div>`).join('')}</div>`;
+  el.querySelector('[data-close]').onclick = () => { el.classList.add('hidden'); S.sel = null; renderDeck(); };
+}
+
+/* ---------- detail card ---------- */
+function renderDetail() {
+  const el = $('#detail'), sel = S.sel;
+  if (!sel || sel.kind === 'assume') { if (!sel) el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  let html = `<button class="iconbtn x" data-close aria-label="Close">${ICON.close}</button>`;
+  if (sel.kind === 'stop') {
+    const s = stops[sel.i], st = stations[s.bikeAt], nb = nextBuses(s.i, S.t).slice(0, 6), flows = stopFlows(S.t);
+    html += `<div class="kind">Bus stop${s.hub ? ' · transport hub' : ''}</div><h3>${esc(s.name)}</h3><div class="sub">${s.code ? 'Code ' + esc(s.code) + ' · ' : ''}${s.lines.length} line${s.lines.length === 1 ? '' : 's'}</div>
+      <div class="lines">${s.lines.map(li => `<button class="lno" data-line="${li}" style="background:rgb(${lineColor(lines[li], S.colorMode)})">${esc(lines[li].n)}</button>`).join('')}</div>
+      <div class="facts"><div class="fact"><b class="num">${fmt(flows[s.i])}</b><span>buses an hour now (simulated)</span></div>
+        <div class="fact"><b class="num">${fmt(s.bike)} m</b><span>to ${st ? esc(st.name) : 'a bike point'} ${s.bike <= STATS.walk ? '· in reach' : '· out of reach'}</span></div></div>
+      <div class="sec"><h3>Next buses <span class="faint">simulated</span></h3><div class="next">${nb.map(x => `<span class="lno" style="background:rgb(${lineColor(x.r.L, S.colorMode)})">${esc(x.r.L.n)}</span>
+        <span class="small">${esc(x.r.name || x.r.L.b)}</span><b class="num">${x.wait == null ? (x.r.geo ? 'diverted' : '—') : x.wait < 1 ? 'now' : fmt(x.wait) + ' min'}</b>`).join('')}</div></div>`;
+  } else if (sel.kind === 'line') {
+    const l = lines[sel.i], rs = l.routes.map(i => routes[i]);
+    const stopSet = new Set(rs.flatMap(r => r.stops.map(([si]) => si)));
+    const near = [...stopSet].filter(si => stops[si].bike <= STATS.walk).length;
+    const f = traffic(S.t), now = rs.reduce((a, r) => a + onRoad(r, S.t, f), 0);
+    html += `<div class="kind">Bus line · ${esc(l.z.en)}</div><h3><span class="lno" style="background:rgb(${lineColor(l, S.colorMode)});margin-right:8px">${esc(l.n)}</span>${esc(l.a)} → ${esc(l.b)}</h3>
+      <div class="sub">${esc(l.carrier)} · ${esc(l.zone)} · ${fmt(l.fare, 2)} AZN${l.pay ? ' · ' + esc(l.pay) : ''}</div>
+      <div class="facts"><div class="fact"><b class="num">${kmStr(rs[0] ? rs[0].len : 0)}</b><span>one way, measured</span></div>
+        <div class="fact"><b class="num">${fmt(l.min)} min</b><span>run time (data)</span></div>
+        <div class="fact"><b class="num">${fmt(rs[0] ? rs[0].hp : 0)} / ${fmt(rs[0] ? rs[0].ho : 0)} min</b><span>headway, peak / off-peak (assumed)</span></div>
+        <div class="fact"><b class="num">${fmt(now)}</b><span>buses on it now (simulated)</span></div>
+        <div class="fact"><b class="num">${fmt(lineFleet(l.i))}</b><span>fleet needed at the peak</span></div>
+        <div class="fact"><b class="num">${stopSet.size ? fmt(100 * near / stopSet.size) : '—'}%</b><span>of its ${stopSet.size} stops have a bike point in reach</span></div></div>
+      <div class="btns" style="margin-top:12px"><button class="btn" style="flex:1" data-act-d="headway">Test its headway</button><button class="btn" style="flex:1" data-act-d="fit">Show the whole line</button></div>`;
+  } else if (sel.kind === 'station') {
+    const s = stations[sel.i];
+    const nearStops = served.filter(x => Math.hypot(...((a, b) => [a[0] - b[0], a[1] - b[1]])(toXY(x.lon, x.lat), toXY(s.lon, s.lat))) <= STATS.walk);
+    html += `<div class="kind">${s.kind === 'MPV' ? 'Bike station (MPV)' : 'Bike parking point (MPS)'}</div><h3>${esc(s.name)}</h3>
+      <div class="facts"><div class="fact"><b class="num">${fmt(s.lane)} m</b><span>to the nearest lane${s.street ? ' (' + esc(s.street) + ')' : ''}</span></div>
+      <div class="fact"><b class="num">${nearStops.length}</b><span>bus stops within ${STATS.walk} m</span></div></div>`;
+  }
+  el.innerHTML = html;
+  el.querySelector('[data-close]').onclick = () => { userInput(); S.sel = null; el.classList.add('hidden'); renderDeck(); };
+  el.querySelectorAll('[data-line]').forEach(b => b.onclick = () => select({ kind: 'line', i: +b.dataset.line }));
+  el.querySelectorAll('[data-act-d]').forEach(b => b.onclick = () => {
+    if (b.dataset.actD === 'headway') { S.hwScope = 'line'; S.scn = 'headway'; setMode('simulate'); }
+    if (b.dataset.actD === 'fit') { const l = lines[S.sel.i]; flyToPath(l.routes.flatMap(i => routes[i].path), { pitch: 30 }); }
+  });
+}
+
+/* ---------- live figures (monitor, mirror, timeline) ---------- */
+let lastLive = 0;
+function updateLive(force) {
+  const now = performance.now();
+  if (!force && now - lastLive < 250) return;
+  lastLive = now;
+  const snap = snapshot(S.t);
+  S.snap = snap;
+  setText('#kFleet', fmt(snap.fleet));
+  setText('#tlNow', fmt(snap.fleet));
+  if (S.mode === 'monitor') {
+    setText('#mFleet', fmt(snap.fleet)); setText('#mLines', fmt(snap.lines));
+    setHTML('#mSpeed', snap.fleet ? fmt(snap.kmh, 1) + '<small>km/h</small>' : '—');
+    setHTML('#mHead', snap.head ? fmt(snap.head, 1) + '<small>min</small>' : '—');
+    const flows = stopFlows(S.t); let bi = 0; for (let i = 1; i < flows.length; i++) if (flows[i] > flows[bi]) bi = i;
+    setHTML('#mStop', flows[bi] > 0 ? `${fmt(flows[bi])}<small>/h · ${esc(stops[bi].name)}</small>` : '—');
+    renderAlerts(flows);
+  }
+  if (S.sel && S.sel.kind !== 'assume' && !S.dragging && now - (S.lastDetail || 0) > 1000) { S.lastDetail = now; renderDetail(); }
+  drawTimeline();
+}
+function setText(s, v) { const el = $(s); if (el && el.firstChild && el.childNodes.length === 1 && el.textContent !== v) el.textContent = v; else if (el && !el.firstChild) el.textContent = v; else if (el && el.childNodes.length > 1) el.textContent = v; }
+function setHTML(s, v) { const el = $(s); if (el && el.innerHTML !== v) el.innerHTML = v; }
+function renderAlerts(flows) {
+  const el = $('#alerts'); if (!el) return;
+  const out = [];
+  if (S.closure) {
+    const res = S.closure.res;
+    out.push(['crit', '!', `Closure${S.closure.name ? ' at ' + S.closure.name : ''}: ${res.lines.size} lines`, `${res.detLines.size} rerouted, up to +${fmt(res.maxExtra, 1)} min a trip · ${res.cutLines.size} turn short · ${res.closedStops.length + res.skipped.size} stops out of service`]);
+  }
+  corridors.forEach(c => {
+    const f = corridorFlow(c, S.t);
+    if (f > 0 && 3600 / f < A.platoon) out.push(['warn', '≋', `Bunching risk on ${c.name}`, `${c.lines.length} lines: a bus every ${fmt(3600 / f)} s each way at ${hhmm(S.t)} (simulated)`, c]);
+  });
+  const top = [...flows.keys()].filter(i => flows[i] > A.stopCap).sort((a, b) => flows[b] - flows[a]).slice(0, 3);
+  top.forEach(i => out.push(['warn', '▲', `Stop over capacity: ${stops[i].name}`, `${fmt(flows[i])} buses an hour, above ${A.stopCap} (simulated)`, null, i]));
+  if (!out.length) out.push(['info', 'i', S.snap && S.snap.fleet ? 'No alerts at this hour' : 'No buses in service', S.snap && S.snap.fleet ? 'Corridors and stops are within their thresholds.' : 'The simulated service runs from about 06:00 to 23:30.']);
+  setText('#alertN', String(out.filter(x => x[0] !== 'info').length || ''));
+  const html = out.slice(0, 6).map(([k, ic, b, s, c, si], idx) => `<button class="alert ${k}" data-al="${idx}"><div class="ic">${ic}</div><div><b>${esc(b)}</b><span>${esc(s)}</span></div></button>`).join('');
+  if (el.innerHTML !== html) {
+    el.innerHTML = html;
+    el.querySelectorAll('[data-al]').forEach(b => b.onclick = () => {
+      const x = out[+b.dataset.al];
+      if (x[4]) flyToPath(x[4].path, { pitch: 55 });
+      if (x[5] != null) { const s = stops[x[5]]; select({ kind: 'stop', i: s.i }); flyTo([s.lon, s.lat], 15.2, 50); }
+    });
+  }
+}
+function drawTimeline() {
+  const svg = $('#tl'); if (!svg) return;
+  const w = svg.clientWidth || 600, h = svg.clientHeight || 40, ser = series(), mx = Math.max(1, ...ser);
+  const key = w + 'x' + h + ':' + svcVersion + ':' + (document.documentElement.dataset.theme);
+  if (svg.dataset.key !== key) {
+    svg.dataset.key = key;
+    const x = t => t / 1440 * w, y = v => h - 12 - v / mx * (h - 16);
+    const pts = ser.map((v, i) => `${x(i * 10).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const bands = [[A.bands[0], A.bands[1]], [A.bands[2], A.bands[3]]].map(([a, b]) => `<rect x="${x(a)}" y="0" width="${x(b) - x(a)}" height="${h - 10}" fill="var(--accent)" opacity=".08"/>`).join('');
+    const ticks = [0, 3, 6, 9, 12, 15, 18, 21].map(hh => `<text class="ax" x="${x(hh * 60) + 2}" y="${h - 1}">${pad(hh)}</text>`).join('');
+    svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    svg.innerHTML = `${bands}<polygon points="0,${h - 12} ${pts} ${w},${h - 12}" fill="var(--curve)" opacity=".16"/><polyline points="${pts}" fill="none" stroke="var(--curve)" stroke-width="1.6"/>
+      <line x1="0" x2="${w}" y1="${h - 12}" y2="${h - 12}" stroke="var(--track)"/>${ticks}<g id="tlCur"><line y1="0" y2="${h - 10}" stroke="var(--ink)" stroke-width="1.5"/><circle r="4" fill="var(--ink)"/></g>`;
+  }
+  const cx = (S.t / 1440) * w, cy = h - 12 - (ser[Math.round(S.t / 10)] || 0) / mx * (h - 16);
+  const cur = svg.querySelector('#tlCur');
+  if (cur) { cur.setAttribute('transform', `translate(${cx.toFixed(1)},0)`); cur.querySelector('circle').setAttribute('cy', cy.toFixed(1)); }
+  svg.setAttribute('aria-valuetext', hhmm(S.t));
+}
+function timelineEvents() {
+  const svg = $('#tl');
+  const setFrom = e => { const r = svg.getBoundingClientRect(); S.t = clamp((e.clientX - r.left) / r.width, 0, 0.9993) * 1440; tick(true); };
+  svg.addEventListener('pointerdown', e => { userInput(); S.dragging = true; svg.setPointerCapture(e.pointerId); setFrom(e); });
+  svg.addEventListener('pointermove', e => { if (S.dragging) setFrom(e); });
+  svg.addEventListener('pointerup', () => { S.dragging = false; });
+  svg.addEventListener('keydown', e => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { S.t = (S.t + (e.key === 'ArrowLeft' ? -15 : 15) + 1440) % 1440; tick(true); e.preventDefault(); } });
+}
+
+/* ---------- labels on the map ---------- */
+let markers = [];
+function labels() {
+  markers.forEach(m => m.remove()); markers = [];
+  if (!map) return;
+  const add = (lngLat, html, cls) => { const el = document.createElement('div'); el.className = 'mlabel ' + (cls || ''); el.innerHTML = html; markers.push(new maplibregl.Marker({ element: el, anchor: 'bottom' }).setLngLat(lngLat).addTo(map)); };
+  if (S.mode === 'understand' && S.understand === 'corridors') corridors.forEach((c, i) => add(c.centre, `${i + 1} · ${esc(c.name)}<small>${c.peak} lines</small>`));
+  if (S.lane) { const c = corridors[S.lane.c]; add(c.centre, `Bus lane · ${esc(c.name)}`, 'green'); }
+  if (S.closure) add([S.closure.lon, S.closure.lat], `Closed · ${S.closure.res.detLines.size} lines rerouted${S.closure.res.cutLines.size ? ` · ${S.closure.res.cutLines.size} turn short` : ''}`, 'red');
+  if (S.azadliq) add(P.path[0], `Azadlıq prospekti lane<small>${kmStr(P.m)}</small>`, 'violet');
+}
+
+/* =========================================================================================== camera */
+function padMap() {
+  if (!map) return;
+  const sheet = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet')) || innerHeight * 0.27;
+  map.setPadding(phone() ? { top: 120, bottom: Math.round(Math.min(sheet, innerHeight * 0.6)) + 50, left: 0, right: 0 } : { top: 70, bottom: 70, left: 380, right: 0 });
+}
+function flyTo(center, zoomTo, pitch, bearing, duration = 1800) { map.flyTo({ center, zoom: zoomTo, pitch: pitch ?? map.getPitch(), bearing: bearing ?? map.getBearing(), duration, essential: true }); }
+function flyToPath(path, opt = {}) {
+  let a = [180, 90], b = [-180, -90];
+  for (const [x, y] of path) { a = [Math.min(a[0], x), Math.min(a[1], y)]; b = [Math.max(b[0], x), Math.max(b[1], y)]; }
+  const pad = phone() ? { top: 40, bottom: 40, left: 30, right: 30 } : { top: 60, bottom: 80, left: 50, right: S.sel ? 380 : 60 };
+  map.fitBounds([a, b], { padding: pad, pitch: opt.pitch ?? 50, bearing: opt.bearing ?? map.getBearing(), duration: opt.duration ?? 1800, maxZoom: opt.maxZoom ?? 15.6, essential: true });
+}
+function fitCorridors() { flyToPath(corridors.flatMap(c => c.path), { pitch: 52, bearing: -12, maxZoom: 12.4 }); }
+function flyOverview(z = 11.4) { map.flyTo({ center: [49.88, 40.40], zoom: phone() ? z - 0.9 : z, pitch: 42, bearing: -12, duration: 2000, essential: true }); }
+
+/* =========================================================================================== ask the twin */
+const INTENTS = [
+  [/rush|peak|morning|s[ae]h[ae]r/, 'Morning peak', 'Clock to 08:15', () => { setTime(495); setMode('monitor'); }],
+  [/evening|axsam/, 'Evening peak', 'Clock to 18:15', () => { setTime(1095); setMode('monitor'); }],
+  [/night|gece|midnight|dark/, 'Night', 'Clock to 22:30', () => { setTime(1350); }],
+  [/noon|midday|lunch/, 'Midday', 'Clock to 13:00', () => setTime(780)],
+  [/gap|first|last.?mile|coverage|reach/, 'Where are the gaps?', 'Busy stops with no bike point in reach', () => { setMode('understand'); groupClick('understand', 'mile', $('[data-group="understand"] [data-v="mile"]')); }],
+  [/corridor|priority|busiest|stack|congest/, 'Busiest corridors', 'Where lines stack up', () => { setMode('understand'); groupClick('understand', 'corridors', $('[data-group="understand"] [data-v="corridors"]')); flyOverview(11.6); }],
+  [/bus ?lane/, 'Test a bus lane', 'On the top corridor', () => { setMode('simulate'); S.scn = 'lane'; if (!S.lane) action('lane'); else renderScenarios(); }],
+  [/azad/, 'Azadlıq prospekti lane', 'Draw the bike lane option', () => { action('go-azadliq'); }],
+  [/close|closure|incident|accident|block/, 'Close a street', 'On the busiest corridor', () => { action('inject'); }],
+  [/headway|frequen|wait|fleet/, 'Change the headway', 'Waiting time against fleet', () => { setMode('simulate'); S.scn = 'headway'; renderScenarios(); }],
+  [/station|velo|bike point|parking/, 'Bike stations at busy stops', 'Coverage gained', () => action('go-stations')],
+  [/bike|lane|cycl/, 'Bike network', 'Lanes, stations and the gaps', () => { setMode('understand'); groupClick('understand', 'bike', $('[data-group="understand"] [data-v="bike"]')); }],
+  [/present|story|board|pitch/, 'Present', 'The 48-second story', () => present()],
+  [/play|day tour|whole day|24/, 'Play the day', '00:00 to 23:59', () => playDay()],
+  [/full ?screen/, 'Full screen', '', () => toggleFull()],
+  [/monitor|now|alert/, 'Monitor', 'The network at this moment', () => setMode('monitor')],
+  [/overview|city|all|home/, 'Whole city', 'Fly out to the overview', () => flyOverview()],
+];
+function askMatches(q) {
+  const n = norm(q.trim()); if (!n) return INTENTS.slice(0, 6).map(x => ({ k: 'Try', t: x[1], h: x[2], run: x[3] }));
+  const out = [];
+  for (const it of INTENTS) if (it[0].test(n)) out.push({ k: 'View', t: it[1], h: it[2], run: it[3] });
+  const lm = n.match(/^(?:line|xett|xətt|bus|avtobus)?\s*#?\s*([0-9]{1,3}[a-z]?)$/i) || n.match(/^(?:line|xett|bus)\s+(\S+)/);
+  if (lm) lines.filter(l => norm(l.n) === lm[1]).forEach(l => out.unshift({ k: 'Line', t: `Line ${l.n}`, h: `${l.a} → ${l.b}`, run: () => { select({ kind: 'line', i: l.i }); flyToPath(l.routes.flatMap(i => routes[i].path), { pitch: 30 }); } }));
+  if (n.length >= 3) {
+    const seen = new Set();
+    for (const s of served) {
+      if (out.length > 9) break;
+      const sn = norm(s.name); if (!sn.includes(n) || seen.has(sn)) continue;
+      seen.add(sn);
+      out.push({ k: 'Stop', t: s.name, h: `${s.lines.length} lines`, run: () => { select({ kind: 'stop', i: s.i }); flyTo([s.lon, s.lat], 15.4, 52); } });
+    }
+  }
+  return out.slice(0, 8);
+}
+function askSetup() {
+  const inp = $('#askIn'), list = $('#askList');
+  let items = [], idx = 0;
+  const draw = () => {
+    items = askMatches(inp.value); idx = 0;
+    list.innerHTML = items.length ? items.map((x, i) => `<li role="option" data-i="${i}" aria-selected="${i === idx}"><span class="k">${x.k}</span><span>${esc(x.t)}</span><span class="h">${esc(x.h || '')}</span></li>`).join('')
+      : `<li><span class="k">Hmm</span><span>No match — try “rush hour”, “line 88”, a stop name, “close a street”</span></li>`;
+    list.classList.remove('hidden');
+  };
+  const run = i => { const x = items[i]; if (!x) return; userInput(); x.run(); toast(x.t + (x.h ? ' — ' + x.h : '')); inp.value = ''; list.classList.add('hidden'); inp.blur(); };
+  inp.addEventListener('focus', draw);
+  inp.addEventListener('input', draw);
+  inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 160));
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { idx = clamp(idx + (e.key === 'ArrowDown' ? 1 : -1), 0, items.length - 1); list.querySelectorAll('li').forEach((li, i) => li.setAttribute('aria-selected', i === idx)); e.preventDefault(); }
+    if (e.key === 'Enter') { run(idx); e.preventDefault(); }
+    if (e.key === 'Escape') { inp.blur(); }
+    e.stopPropagation();
+  });
+  list.addEventListener('pointerdown', e => { const li = e.target.closest('[data-i]'); if (li) { e.preventDefault(); run(+li.dataset.i); } });
+}
+function setTime(t) { S.t = t; tick(true); }
+
+/* =========================================================================================== toasts, captions */
+let toastTimer = 0;
+function toast(msg) { const el = $('#toast'); el.textContent = msg; el.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('on'), 2600); }
+function caption(k, parts, assumption) {
+  // parts: strings and [template, value] pairs; a pair whose value is zero or unknown drops out
+  const text = parts.map(p => Array.isArray(p) ? (p[1] && isFinite(p[1]) && p[1] > 0 ? p[0].replace('{}', fmt(p[1], p[2] || 0)) : '') : p).filter(Boolean).join('');
+  const el = $('#caption');
+  el.querySelector('.k').textContent = k; el.querySelector('.t').textContent = text.replace(/\s+/g, ' ').trim(); el.querySelector('.a').textContent = assumption || '';
+  el.classList.toggle('on', !!text);
+}
+const hideCaption = () => $('#caption').classList.remove('on');
+
+/* =========================================================================================== tours: intro, play the day, present */
+let tour = null;      // { kind, timers, raf, restore }
+function tourTimers(fn, ms) { const id = setTimeout(fn, ms); tour.timers.push(id); return id; }
+function endTour(handBack = true) {
+  if (!tour) return;
+  const t = tour; tour = null;
+  t.timers.forEach(clearTimeout); cancelAnimationFrame(t.raf);
+  document.body.classList.remove('cinema');
+  $('#progress i').style.width = '0';
+  hideCaption();
+  if (handBack && t.restore) t.restore();
+  syncClock();
+}
+function userInput() { if (tour && tour.kind !== 'intro-hold') endTour(); }
+function playDay() {
+  if (tour) { const was = tour.kind; endTour(); if (was === 'day') return; }
+  const saved = { t: S.t, speed: S.speed, playing: S.playing, cam: camera() };
+  tour = { kind: 'day', timers: [], restore: () => { S.t = saved.t; S.speed = saved.speed; S.playing = saved.playing; map.easeTo({ ...saved.cam, duration: 1400 }); tick(true); } };
+  const DUR = 48000, t0 = performance.now();
+  S.playing = false; S.speed = 1800; S.t = 0;
+  map.easeTo({ center: [49.87, 40.405], zoom: phone() ? 11.2 : 12.1, pitch: 58, bearing: -30, duration: 1600 });
+  const marks = [
+    [60, 'Night', () => [['{} buses still out from the evening', snapshot(S.t).fleet], ' · the network sleeps']],
+    [345, 'First light', () => [['The first departures: {} buses on the road by 06:15', snapshot(375).fleet]]],
+    [495, 'Morning peak', () => { const s = snapshot(495); return [['{} buses on the road', s.fleet], [' at an average {} km/h', s.kmh, 1], ' in assumed peak traffic']; }],
+    [780, 'Midday', () => [['{} buses', snapshot(780).fleet], ' at off-peak headways']],
+    [1095, 'Evening peak', () => { const s = snapshot(1095); return [['{} buses', s.fleet], [' · {} km/h average', s.kmh, 1]]; }],
+    [1230, 'Dusk', () => [['Street lights on; {} buses still running', snapshot(1230).fleet]]],
+    [1400, 'Last trips', () => [['{} buses finishing the day', snapshot(1400).fleet]]],
+  ];
+  let mi = 0;
+  const step = now => {
+    if (!tour || tour.kind !== 'day') return;
+    const x = clamp((now - t0) / DUR, 0, 1);
+    S.t = x * 1439;
+    $('#progress i').style.width = (x * 100) + '%';
+    if (!map.isMoving()) map.setBearing(map.getBearing() + 0.045);
+    while (mi < marks.length && S.t >= marks[mi][0]) { const [, k, f] = marks[mi++]; caption(k + ' · ' + hhmm(marks[mi - 1][0]), f(), 'Simulated timetable · assumed headways and traffic'); }
+    tick(true);
+    if (x < 1) tour.raf = requestAnimationFrame(step); else tourTimers(() => endTour(), 1200);
+  };
+  tour.raf = requestAnimationFrame(step);
+  toast('Playing the day · tap anywhere to stop');
+}
+function camera() { return { center: map.getCenter(), zoom: map.getZoom(), pitch: map.getPitch(), bearing: map.getBearing() }; }
+function present() {
+  if (tour) { const was = tour.kind; endTour(); if (was === 'present') return; }
+  const saved = { mode: S.mode, t: S.t, speed: S.speed, playing: S.playing, lane: S.lane, closure: S.closure, azadliq: S.azadliq, newStations: S.newStations, cam: camera(), sel: S.sel, understand: S.understand, scn: S.scn };
+  tour = { kind: 'present', timers: [], restore: () => {
+    S.lane = saved.lane; S.newStations = saved.newStations;
+    if (S.closure !== saved.closure) { S.closure = saved.closure; applyClosure(saved.closure ? saved.closure.res : null); } else rebuildAll();
+    if (S.azadliq !== saved.azadliq) revealProposal(saved.azadliq);
+    S.t = saved.t; S.speed = saved.speed; S.playing = saved.playing; S.sel = saved.sel; S.understand = saved.understand; S.scn = saved.scn;
+    riseHeat(0); setMode(saved.mode); map.easeTo({ ...saved.cam, duration: 1500 }); renderDetail(); tick(true);
+  } };
+  document.body.classList.add('cinema');
+  $('#detail').classList.add('hidden');
+  S.sel = null; S.lane = null; S.newStations = 0;
+  if (S.closure) { S.closure = null; applyClosure(null); }
+  if (S.azadliq) { S.azadliq = false; S.propReveal = 0; }
+  rebuildAll(); labels();
+  S.playing = true; S.speed = 60; S.t = 470;
+  const c0 = corridors[0], ci = storyClosure(), c1 = corridors[ci];
+  const lr = laneResult(0, A.laneGain);
+  const closure = c1.closure;
+  const st10 = stationsResult(10);
+  const peakFleet = Math.max(...series());
+  const steps = [
+    [0, () => { flyOverview(11.5); caption('Mirror', [['{} bus lines', STATS.linesMapped], ' run on their real streets', [', {} stops', STATS.stopsServed], [', {} km of bike lanes', STATS.lanesKm], ' — one model of the city'], 'Network from data · timetable simulated'); }],
+    [7000, () => { S.t = 495; flyToPath(c0.path, { pitch: 60, bearing: 25, duration: 2600, maxZoom: 13.9 }); const s = snapshot(495); caption('Monitor', ['At 08:15 ', ['{} buses are on the road', s.fleet], [' — {} lines share this stretch of ' + c0.name, c0.peak], [', a bus every {} seconds each way', 3600 / Math.max(1, corridorFlow(c0, 495))]], 'Simulated timetable · assumed headways'); }],
+    [14000, () => { S.understand = 'corridors'; setMode('understand'); document.body.classList.add('cinema'); riseHeat(1); flyOverview(11.7); caption('Understand', [['Five corridors carry {}', Math.min(...corridors.map(c => c.peak))], [' to {} lines each', Math.max(...corridors.map(c => c.peak))], ': the shortlist for bus priority'], 'Measured from route geometry'); }],
+    [21000, () => { riseHeat(0); S.scn = 'lane'; setMode('simulate'); document.body.classList.add('cinema'); S.lane = { c: 0, gain: A.laneGain }; rebuildAll(); labels(); flyToPath(c0.path, { pitch: 60, bearing: -20, duration: 2400 });
+      caption('Decide', ['A bus lane on ' + c0.name, [' saves {} bus-hours a day', lr.busHours], [` and frees {} bus${lr.freed === 1 ? '' : 'es'} at the peak`, lr.freed]], `Assumes +${Math.round(A.laneGain * 100)}% bus speed in the lane`); }],
+    [28500, () => { S.lane = null; S.closure = { lon: c1.closeAt.lon, lat: c1.closeAt.lat, r: 150, res: closure, c: ci, name: c1.closeAt.name }; applyClosure(closure); labels(); flyTo([c1.closeAt.lon, c1.closeAt.lat], 14.2, 55, 30, 2400);
+      caption('Prepare', ['Close ' + c1.name + ' at its busiest stop', [': {} lines reroute', closure.detLines.size], [' at +{} min a trip', closure.avgExtra, 1], [', {} turn short', closure.cutLines.size], [', {} stops lose service', closure.closedStops.length + closure.skipped.size]], 'Detours on streets other lines already use'); }],
+    [36000, () => { S.closure = null; applyClosure(null); S.scn = 'azadliq'; revealProposal(true); labels(); flyToPath(P.path, { pitch: 55, bearing: -15, duration: 2400 });
+      caption('Connect', [['{} km of lane on Azadlıq prospekti', P.m / 1000, 1], ' joins the Vaqif pr. lane to Azadlıq metro', [': {} stations onto the network', P.stationsOn.length], [', {} bus stops in reach of a lane', P.stopsNew.length]], 'Alignment from the bus route on the avenue'); }],
+    [43000, () => { S.scn = 'stations'; S.newStations = 10; S.t = 1180; labels(); flyOverview(11.4);
+      caption('Every decision, tested first', [['{} busy stops have no bike point in reach', gaps.length], [' — ten new stations cover {} more stops', st10.covered - st10.before]], 'One model: mirror, monitor, understand, decide'); }],
+    [49500, () => endTour()],
+  ];
+  steps.forEach(([ms, fn]) => tourTimers(() => { if (tour && tour.kind === 'present') { fn(); renderDeck(); } }, ms));
+  const t0 = performance.now();
+  const prog = now => { if (!tour || tour.kind !== 'present') return; $('#progress i').style.width = clamp((now - t0) / 49500 * 100, 0, 100) + '%'; tour.raf = requestAnimationFrame(prog); };
+  tour.raf = requestAnimationFrame(prog);
+  syncClock();
+}
+function intro() {
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  tour = { kind: 'intro', timers: [], restore: null };
+  const fin = () => { $('#title').classList.add('off'); $('#veil').classList.add('off'); };
+  if (reduced) { fin(); tour = null; return; }
+  map.flyTo({ center: [49.862, 40.392], zoom: phone() ? 11.3 : 12.35, pitch: 56, bearing: -24, duration: 7200, curve: 1.15, essential: true });
+  tourTimers(fin, 4300);
+  tourTimers(() => { if (tour && tour.kind === 'intro') { tour = null; } }, 7400);
+}
+function exitAll() {
+  if (tour) return endTour();
+  if (document.fullscreenElement || document.webkitFullscreenElement) return (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  if (document.body.classList.contains('cover')) return cover(false);
+}
+
+/* =========================================================================================== full screen */
+function toggleFull() {
+  const fs = document.fullscreenElement || document.webkitFullscreenElement;
+  if (fs) return (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  if (document.body.classList.contains('cover')) return cover(false);
+  const el = document.documentElement, req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (!req) return cover(true);
+  try { const p = req.call(el, { navigationUI: 'hide' }); if (p && p.catch) p.catch(() => cover(true)); } catch (e) { cover(true); }
+}
+// where the browser has no full screen for pages (iPhone Safari), the twin covers the window and hides its controls
+function cover(on) { document.body.classList.toggle('cover', on); setTimeout(() => map.resize(), 50); if (on) toast('Full window · Esc or Exit to return'); }
+document.addEventListener('fullscreenchange', () => { $('#btnFull').classList.toggle('on', !!document.fullscreenElement); setTimeout(() => map && map.resize(), 60); });
+
+/* =========================================================================================== keyboard */
+document.addEventListener('keydown', e => {
+  if (e.target.closest && e.target.closest('input, textarea')) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key;
+  if (k === 'Escape') { exitAll(); if (S.sel) { S.sel = null; $('#detail').classList.add('hidden'); renderDeck(); } return; }
+  if (k === 'f' || k === 'F') { toggleFull(); return; }
+  if (k === 'p' || k === 'P') { present(); return; }
+  if (k === 'd' || k === 'D') { playDay(); return; }
+  userInput();
+  if (k === ' ') { S.playing = !S.playing; syncClock(); e.preventDefault(); }
+  else if (k === '/') { $('#askIn').focus(); e.preventDefault(); }
+  else if (/^[1-5]$/.test(k)) setMode(MODES[+k - 1][0]);
+  else if (k === 'ArrowLeft' || k === 'ArrowRight') { if (document.activeElement && document.activeElement.id === 'tl') return; S.t = (S.t + (k === 'ArrowLeft' ? -15 : 15) + 1440) % 1440; tick(true); }
+});
+
+/* =========================================================================================== phone sheet */
+function sheetSetup() {
+  const panel = $('#panel'), h = $('#panel .handle');
+  const sizes = () => [Math.round(innerHeight * 0.27), Math.round(innerHeight * 0.55), Math.round(innerHeight * 0.86)];
+  let state = 0;
+  const set = i => { state = clamp(i, 0, 2); document.documentElement.style.setProperty('--sheet', sizes()[state] + 'px'); setTimeout(() => { if (map) { map.resize(); padMap(); } }, 400); };
+  set(0);
+  h.addEventListener('click', () => set((state + 1) % 3));
+  h.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { set((state + 1) % 3); e.preventDefault(); } });
+  let y0 = null, h0 = 0;
+  h.addEventListener('pointerdown', e => { y0 = e.clientY; h0 = panel.getBoundingClientRect().height; h.setPointerCapture(e.pointerId); panel.style.transition = 'none'; });
+  h.addEventListener('pointermove', e => { if (y0 == null) return; document.documentElement.style.setProperty('--sheet', clamp(h0 + (y0 - e.clientY), 120, innerHeight * 0.9) + 'px'); });
+  h.addEventListener('pointerup', e => {
+    if (y0 == null) return; panel.style.transition = '';
+    const cur = h0 + (y0 - e.clientY), sz = sizes(); y0 = null;
+    if (Math.abs(cur - h0) < 6) return;
+    set(sz.reduce((bi, v, i) => Math.abs(v - cur) < Math.abs(sz[bi] - cur) ? i : bi, 0));
+  });
+  addEventListener('resize', () => set(state));
+}
+
+/* =========================================================================================== the loop, quality tiers */
+let last = performance.now(), frames = [], tierCooldown = 0;
+function tick(force) {
+  if (force) { renderDeck(); applySun(); updateLive(true); clockLabel(); }
+}
+function clockLabel() {
+  const sun = S.sun || sunAt(S.t);
+  setText('#clockT', hhmm(S.t));
+  setText('#clockS', `${DATE_LABEL} · ${sun.alt > 0 ? 'sun ' + Math.round(sun.alt) + '°' : 'night'} · simulated`);
+}
+// MapLibre and luma.gl (under deck) both size the one canvas; luma's resize observer follows its own pixel-ratio
+// setting, so both get the same ratio and are resized together
+function syncPixelRatio(ratio) {
+  map.setPixelRatio(ratio);
+  if (overlay) overlay.setProps({ useDevicePixels: ratio });
+  const ctx = map.__deck && map.__deck.device && map.__deck.device.canvasContext;
+  if (ctx && ctx.props) { ctx.props.useDevicePixels = ratio; ctx.resize({ useDevicePixels: ratio }); }
+  map.resize();
+}
+function setTier(t) {
+  if (t === S.tier) return;
+  S.tier = t;
+  syncPixelRatio(Math.min(devicePixelRatio || 1, [1, 1.5, 2][t]));
+  map.setLayoutProperty('building-3d', 'visibility', S.layers.buildings && t > 0 ? 'visible' : 'none');
+  applySun(true);
+}
+function frame(now) {
+  const dt = Math.min(100, now - last); last = now;
+  if (S.playing && !(tour && (tour.kind === 'day'))) S.t = (S.t + dt / 1000 * S.speed / 60) % 1440;
+  const moving = S.playing || (tour && tour.kind === 'day') || map.isMoving();
+  if (S.playing || (tour && tour.kind === 'day')) { renderDeck(); applySun(); updateLive(); clockLabel(); }
+  // adapt quality from frame time while the scene animates
+  if (moving && document.visibilityState === 'visible') {
+    frames.push(dt); if (frames.length > 90) frames.shift();
+    if (frames.length === 90 && now > tierCooldown) {
+      const avg = frames.reduce((a, b) => a + b, 0) / frames.length;
+      if (avg > 30 && S.tier > 0) { setTier(S.tier - 1); tierCooldown = now + 4000; frames = []; }
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+/* =========================================================================================== start */
+async function start() {
+  buildChrome(); panelEvents(); timelineEvents(); askSetup();
+  rebuildAll(); buildBikes();
+  const nowMin = (BAKU_NOW - DAY_BAKU) / 60000;
+  S.t = nowMin >= 390 && nowMin <= 1320 ? nowMin : 495;
+  S.tier = coarse || innerWidth < 900 ? 1 : 2;
+  let style;
+  try { style = await loadStyle(); }
+  catch (e) { $('#loading').innerHTML = `<div class="err"><b>The map could not load.</b><br>The twin needs the internet for its base map (OpenFreeMap) and libraries (unpkg). ${esc(e.message)}</div>`; return; }
+  map = new maplibregl.Map({
+    container: 'map', style, center: [49.93, 40.25], zoom: phone() ? 9.6 : 10.4, pitch: 12, bearing: 8, maxPitch: 78, minZoom: 8.5,
+    antialias: S.tier >= 2, pixelRatio: Math.min(devicePixelRatio || 1, [1, 1.5, 2][S.tier]), attributionControl: { compact: true }, fadeDuration: 200,
+  });
+  map.on('styleimagemissing', e => { if (e.id === 'windows' && !map.hasImage('windows')) map.addImage('windows', windowImage(), { pixelRatio: 2 }); });
+  map.on('load', () => {
+    if (!map.hasImage('windows')) map.addImage('windows', windowImage(), { pixelRatio: 2 });
+    // deck shares MapLibre's canvas: it must size it with the same pixel ratio, or MapLibre draws into a corner of it
+    overlay = new MapboxOverlay({ interleaved: true, layers: [], effects: [lighting], pickingRadius: phone() ? 12 : 6, useDevicePixels: map.getPixelRatio(),
+      onLoad: () => syncPixelRatio(map.getPixelRatio()) });
+    map.addControl(overlay);
+    map.on('zoom', () => { zoom = map.getZoom(); if (!S.playing) renderDeck(); });
+    map.on('click', e => {
+      if (S.closeMode) { closeStreet(e.lngLat.lng, e.lngLat.lat, null); return; }
+      const hits = overlay.pickObject({ x: e.point.x, y: e.point.y, radius: phone() ? 14 : 6 });
+      if (!hits) { if (S.sel && S.sel.kind !== 'assume') { S.sel = null; $('#detail').classList.add('hidden'); renderDeck(); } }
+    });
+    map.on('movestart', e => { if (e.originalEvent) userInput(); });
+    zoom = map.getZoom();
+    padMap();
+    addEventListener('resize', padMap);
+    applySun(true);
+    setMode('mirror');
+    syncClock();
+    tick(true);
+    $('#loading').classList.add('off');
+    // attribution stays one tap away (the i button) instead of covering the controls
+    setTimeout(() => document.querySelectorAll('.maplibregl-ctrl-attrib.maplibregl-compact-show').forEach(el => el.classList.remove('maplibregl-compact-show')), 1200);
+    requestAnimationFrame(frame);
+    setTimeout(intro, 350);
+    const idle = window.requestIdleCallback || (f => setTimeout(f, 1));
+    setTimeout(() => idle(() => { graph(); idle(() => storyClosure()); }), 9000);
+    window.__twin.ready = true;
+  });
+  map.on('error', e => { if (e && e.error && !/Failed to fetch|NetworkError|AbortError/.test(String(e.error.message))) console.warn('map:', e.error.message); });
+}
+window.__twin = { ready: false, graphStats: () => { graph(); const { N, E } = G; const comp = new Int32Array(N).fill(-1); let k = 0; const sizes = [];
+    for (let i = 0; i < N; i++) { if (comp[i] >= 0) continue; let n = 0; const st = [i]; comp[i] = k; while (st.length) { const u = st.pop(); n++; for (const v of E[u]) if (comp[v] < 0) { comp[v] = k; st.push(v); } } sizes.push(n); k++; }
+    sizes.sort((a, b) => b - a); return { N, comps: k, top: sizes.slice(0, 5), edges: E.reduce((a, e) => a + e.length, 0) / 2 }; }, S, get styleColors() { return styleColors; }, applySun, routes, lines, stops, corridors, snapshot, series, laneResult, stationsResult, closeAt, setMode, setTime, present, playDay, toggleFull,
+  get map() { return map; }, get overlay() { return overlay; }, endTour, setTier, select, action };
+start();
+})();
+</script>
+</body>
+</html>
