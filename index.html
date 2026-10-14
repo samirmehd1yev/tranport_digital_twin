@@ -2698,6 +2698,7 @@ function endTour(handBack = true) {
   if (!tour) return;
   const t = tour; tour = null;
   t.timers.forEach(clearTimeout); cancelAnimationFrame(t.raf);
+  hideTitle();
   document.body.classList.remove('cinema');
   $('#progress i').style.width = '0';
   hideCaption();
@@ -2781,12 +2782,17 @@ function present() {
   tour.raf = requestAnimationFrame(prog);
   syncClock();
 }
+// The title card and the veil behind it lift whatever happens to the intro: on its own timer, at the reader's first
+// touch, when any tour ends, and on a backstop that is no tour's timer. They used to lift only on a tour timer, so a
+// scroll or a click in the first seconds ended the intro, cancelled that timer, and left both on screen for good.
+function hideTitle() { $('#title').classList.add('off'); $('#veil').classList.add('off'); }
 function intro() {
   tour = { kind: 'intro', timers: [], restore: null };
-  const fin = () => { $('#title').classList.add('off'); $('#veil').classList.add('off'); };
-  if (reduced) { fin(); tour = null; return; }
+  if (reduced) { hideTitle(); tour = null; return; }
+  for (const type of ['pointerdown', 'wheel', 'keydown', 'touchstart']) addEventListener(type, hideTitle, { once: true, capture: true, passive: true });
+  setTimeout(hideTitle, 6500);
   map.flyTo({ center: [49.862, 40.392], zoom: phone() ? 11.3 : 12.35, pitch: 56, bearing: -24, duration: 7200, curve: 1.15, essential: true });
-  tourTimers(fin, 4300);
+  tourTimers(hideTitle, 4300);
   tourTimers(() => { if (tour && tour.kind === 'intro') tour = null; }, 7400);
 }
 function exitAll() {
