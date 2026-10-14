@@ -124,8 +124,8 @@ svg{flex:none}
 .tag.sim{color:var(--accent);background:var(--accent-soft)}
 .tag.data{color:var(--bike);background:var(--bike-soft)}
 .tag.asm{color:var(--ink3);background:var(--chip)}
-.delta{font-size:11px;font-weight:700;padding:1px 6px;border-radius:var(--rp);white-space:nowrap;opacity:0;transition:opacity .2s}
-.delta.on{opacity:1}
+.delta{font-size:11px;font-weight:700;padding:1px 7px;border-radius:var(--rp);white-space:nowrap;display:none;margin-left:auto;flex:none;animation:enter .25s ease both}
+.delta.on{display:inline-block}
 .delta.good{color:var(--ok);background:var(--bike-soft)}.delta.bad{color:var(--danger);background:var(--danger-soft)}.delta.neutral{color:var(--ink2);background:var(--chip)}
 
 /* glance */
@@ -419,7 +419,6 @@ body.cover #timeline{left:12px}
   #panel .lede{min-height:0}
   #panel .body{padding:var(--s1) var(--s4) var(--s5)}
   #detail{top:auto;left:0;right:0;bottom:0;width:auto;max-height:66vh;border-radius:var(--r4) var(--r4) 0 0;z-index:25;padding:var(--s5) var(--s4) calc(var(--s4) + env(safe-area-inset-bottom));border-bottom:0}
-  #detail::before{content:"";position:absolute;left:50%;top:9px;width:40px;height:5px;border-radius:3px;background:var(--track);transform:translateX(-50%)}
   #timeline{left:8px;right:8px;bottom:calc(var(--sheet,240px) + 8px);height:52px;padding:4px 10px;transition:bottom .38s cubic-bezier(.2,.8,.2,1)}
   #timeline .lab{width:64px}
   #caption{bottom:calc(32px + env(safe-area-inset-bottom));padding:var(--s3) var(--s4)}
@@ -1803,11 +1802,11 @@ function setDelta(id, cur, base, d, unit, better) {
   const el = document.getElementById(id + '-d');
   if (!el) return;
   const diff = cur - base, on = scenarioOn() && Math.abs(diff) >= 0.5 * 10 ** -d;
-  el.classList.toggle('on', on);
-  if (!on) return;
+  if (!on) { if (el.classList.contains('on')) el.className = 'delta'; return; }
   const good = better === 'higher' ? diff > 0 : better === 'lower' ? diff < 0 : null;
-  el.className = 'delta on ' + (good == null ? 'neutral' : good ? 'good' : 'bad');
-  el.textContent = (diff > 0 ? '+' : '−') + fmt(Math.abs(diff), d) + (unit || '');
+  const cls = 'delta on ' + (good == null ? 'neutral' : good ? 'good' : 'bad'), txt = (diff > 0 ? '+' : '−') + fmt(Math.abs(diff), d) + (unit || '');
+  if (el.className !== cls) el.className = cls;
+  if (el.textContent !== txt) el.textContent = txt;
   el.title = 'Against the same moment without your changes';
 }
 
@@ -1856,7 +1855,7 @@ function setMode(m) {
   if (m === 'understand' && prev !== 'understand') { riseHeat(S.understand === 'corridors' ? 1 : 0); if (!tour && S.understand === 'corridors') fitCorridors(); }
   if (m !== 'understand' && S.heatRise > 0 && !tour) riseHeat(0);
   renderPanel();
-  if (prev !== m) { fadeIn($('#panel .head')); fadeIn($('#panel .body')); }
+  if (prev !== m) { $('#panel .body').scrollTop = 0; fadeIn($('#panel .head')); fadeIn($('#panel .body')); }
   renderDeck();
   labels();
 }
@@ -1881,9 +1880,9 @@ const TAG = { sim: ['sim', 'simulated'], data: ['data', 'from data'], asm: ['asm
 function kpi(o) {
   const [cls, txt] = TAG[o.tag] || TAG.sim;
   return `<div class="kpi${o.wide ? ' wide' : ''}">
-    <div class="kpi-top"><span class="kpi-l">${o.label}</span><span class="delta" id="${o.id}-d"></span></div>
+    <div class="kpi-top"><span class="kpi-l">${o.label}</span></div>
     <div class="kpi-v"><b class="num" id="${o.id}">—</b>${o.unit ? `<small>${o.unit}</small>` : ''}${o.sub ? `<span class="sub2" id="${o.id}-x"></span>` : ''}${o.spark ? `<svg class="spark" id="${o.id}-s" viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true"></svg>` : ''}</div>
-    <div class="kpi-f"><span class="tag ${cls}">${o.tagText || txt}</span></div>
+    <div class="kpi-f"><span class="tag ${cls}" title="${o.tagText || txt}">${o.tagText || txt}</span><span class="delta" id="${o.id}-d"></span></div>
   </div>`;
 }
 function renderPanel() {

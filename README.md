@@ -17,10 +17,30 @@ where the network is strained, and tests a decision before the city pays for it.
 | **Simulate and decide** | Five what-ifs, each with before and after and the assumption it rests on: a bus lane on a corridor, a headway change (waiting time against fleet), a street closure with detours, the Azadlıq prospekti bike lane, and new bike stations at busy stops. | The cost and benefit of a decision, tested in minutes. |
 | **Present** | A 48-second story with a scripted camera and captions, Play the day (00:00 to 23:59), full screen and a phone layout. | The case, ready for a boardroom screen. |
 
-Hover or tap a line or stop for details: the route lights up, with lines served, headways, the next simulated
-buses and the nearest bike point. **Ask the twin** (the bar at the bottom, or `/`) understands plain phrases such
-as "rush hour", "where are the gaps", "line 88", "close a street", "Azadlıq" or a stop's name. It runs in the page,
-with no AI service behind it.
+**Tap anything on the map for its card:**
+
+- **A bus:** its line, carrier, direction and destination, how far along its route it is, its speed, and the next
+  three stops with arrival times. **Follow** puts the camera behind it.
+- **A stop:** a departures board with the next arrivals of every line, the lines it serves, a hub badge, and the
+  nearest bike point with the walk in minutes.
+- **A line:** a strip map of its stops in either direction with its buses moving along it, departures by hour, and
+  the register's own figures: length, run time, fare, payment, carrier and service type.
+- **A bike station or parking point:** how far it is from a lane, whether it counts as on the network, and its
+  nearest bus stops.
+
+Bus positions, arrival times and departures come from the simulated timetable and are labelled as such.
+
+**Mirror** also opens with *the network at a glance*: the busiest corridor, the longest line, the stop most lines
+serve, the hubs, and bike-lane length street by street, all from the data. Zoom in close and the buses become 3D
+buses facing their direction of travel, with headlights at night. Stops become poles, and hubs get glazed
+shelters. The timeline marks sunrise and sunset for the day shown.
+
+The KPI cards carry a sparkline of the whole day and count to new values. Once a scenario is applied, they show a
+**delta chip** against the same moment without it.
+
+**Ask the twin** (the bar at the bottom, or `/`) understands plain phrases such as "rush hour", "where are the
+gaps", "line 88", "follow a bus", "close a street", "Azadlıq" or a stop's name. It runs in the page, with no AI
+service behind it.
 
 Keys: `Space` pause · `D` play the day · `P` present · `F` full screen · `1`–`5` modes · `←` `→` move the clock ·
 `Esc` exit.
@@ -58,6 +78,7 @@ There is no ridership in the data, so the twin shows no passenger numbers.
 - **Bunching** is flagged below 30 s between buses in one direction.
 - **A bus lane** gains +20% bus speed. This one can be adjusted in the page.
 - **Walking reach** is 300 m from a stop to a bike point. A station within 50 m of a lane counts as on it.
+- **Walking pace** is 80 m a minute (4.8 km/h), for the minutes on foot shown in the cards.
 
 **Detours** follow streets that other bus lines already use, at each line's speed. The data has no one-way rules.
 A line turns short when its terminus is inside the closure, or when the only way round is more than three times
@@ -108,10 +129,18 @@ The page computes everything else live, from the data and the stated assumptions
 
 - MapLibre GL 4.7.1;
 - deck.gl 9.0.38;
-- the OpenFreeMap *positron* base map, recoloured for night.
+- the OpenFreeMap *positron* base map, muted so the network leads and recoloured for night;
+- the Inter typeface.
 
 The simulated timetable runs on the GPU. Each route is one path, and a shader works out, for every point on it,
-when the last scheduled bus passed. Only the clock changes per frame.
+when the last scheduled bus passed. Only the clock changes per frame. The same arithmetic on the CPU places single
+buses: the one you select or follow, and the 3D buses drawn up close. Those are written into preallocated arrays,
+so no data is rebuilt while the scene runs.
+
+The brand mark is `src/icon.svg`. The page uses it in the header and as the favicon. `build.py` embeds it with two
+PNG renderings: `src/icon-32.png` for browsers without SVG favicons, and `src/apple-touch-icon.png` (180 × 180)
+for home screens. After changing the mark, run `npm i --no-save playwright@1.61.0 && node tools/render-icons.mjs`
+to render the PNGs again.
 
 ## Checked
 
@@ -119,7 +148,9 @@ The page was checked in Chromium with Playwright:
 
 - **Screens:** desktop 1440×900 and 1200×800, and a phone (iPhone 14 profile).
 - **Every mode and scenario,** plus the story, Play the day, full screen, Ask the twin and selection.
+- **Cards:** every card, opened by clicking real objects on the map, by day and at night, on desktop and phone.
+- **Favicons:** all three decode in the page (64, 32 and 180 px).
 - **Console:** no errors or warnings.
-- **Flicker:** still frames under forced repaint are pixel-identical, by day, at dusk, at night and in the 3D
-  corridor view.
+- **Flicker:** still frames under forced repaint are pixel-identical, by day, at dusk, at night (with 3D buses and
+  lit windows) and in the 3D corridor view.
 - **Speed:** the phone profile holds 120 fps with the CPU throttled four times.

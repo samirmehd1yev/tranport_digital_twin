@@ -1,5 +1,6 @@
 // Renders the PNG icons from src/icon.svg once; build.py embeds all three in index.html.
-// Only needed after changing src/icon.svg:  npx -y -p playwright@1.61.0 node tools/render-icons.mjs
+// Only needed after changing src/icon.svg:
+//   npm i --no-save playwright@1.61.0 && node tools/render-icons.mjs
 //   src/icon-32.png             32 x 32, the browser-tab fallback for browsers without SVG favicons
 //   src/apple-touch-icon.png    180 x 180, full-bleed: iOS rounds the corners itself
 import { chromium } from "playwright";
