@@ -12,7 +12,7 @@ computed in the page from them, and the page states the assumptions its simulate
     python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
     .venv/bin/python build.py            # -> index.html
 """
-import collections, datetime, json, re, sqlite3, statistics
+import base64, collections, datetime, json, re, sqlite3, statistics
 from pathlib import Path
 from zipfile import ZipFile
 import xml.etree.ElementTree as ET
@@ -416,6 +416,19 @@ blob = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 template = (ROOT / "src" / "app.html").read_text(encoding="utf8")
 check("/*__DATA__*/null" in template, "src/app.html has the data slot")
 html = template.replace("/*__DATA__*/null", blob.replace("</", "<\\/"))
+
+# the brand mark: inline in the header, and the favicons as data URIs (PNGs rendered once by tools/render-icons.mjs)
+icon_svg = (ROOT / "src" / "icon.svg").read_text(encoding="utf8").strip()
+data_uri = lambda mime, raw: f"data:{mime};base64,{base64.b64encode(raw).decode()}"
+icons = {
+    "__ICON_SVG_URI__": data_uri("image/svg+xml", icon_svg.encode()),
+    "__ICON_32_URI__": data_uri("image/png", (ROOT / "src" / "icon-32.png").read_bytes()),
+    "__ICON_180_URI__": data_uri("image/png", (ROOT / "src" / "apple-touch-icon.png").read_bytes()),
+    "<!--__LOGO__-->": icon_svg.replace('role="img" aria-label="Baku Mobility Twin"', 'aria-hidden="true"'),
+}
+for slot, value in icons.items():
+    check(slot in html, f"src/app.html has the {slot} slot")
+    html = html.replace(slot, value)
 (ROOT / "index.html").write_text(html, encoding="utf8")
 
 print(f"index.html {len(html.encode('utf8')) / 1e6:.2f} MB")
